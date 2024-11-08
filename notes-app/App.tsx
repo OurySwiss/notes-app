@@ -10,6 +10,10 @@ import Login from './app/screens/Login';
 import Profile from './app/screens/Profile';
 import Registration from './app/screens/Registration';
 import { RootStackParamList } from './app/types';
+import CreateNote from './app/screens/CreateNote';
+import AllNotes from './app/screens/AllNotes';
+import EditNote from './app/screens/EditNote';
+
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -71,11 +75,26 @@ const App = () => {
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login">
         {user ? (
-          <Stack.Screen
-            name="Inside"
-            component={InsideLayout}
-            options={{ headerShown: false }}
-          />
+          <>
+            <Stack.Screen 
+              name="AllNotes" 
+              component={AllNotes}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="CreateNote"
+              component={CreateNote}
+              options={{ title: 'Neue Notiz erstellen' }}
+            />
+            <Stack.Screen
+              name="Inside"
+              component={InsideLayout} />
+
+            <Stack.Screen 
+              name="EditNote" 
+              component={EditNote} />
+          </>
+          
         ) : (
           <>
             <Stack.Screen
