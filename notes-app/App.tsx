@@ -11,6 +11,7 @@ import Profile from './app/screens/Profile';
 import Registration from './app/screens/Registration';
 import { RootStackParamList } from './app/types';
 import CreateNote from './app/screens/CreateNote';
+import AllNotes from './app/screens/AllNotes';
 
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -84,6 +85,10 @@ const App = () => {
               component={CreateNote}
               options={{ title: 'Neue Notiz erstellen' }}
             />
+
+            <Stack.Screen 
+              name="AllNotes" 
+              component={AllNotes} />
           </>
         ) : (
           <>
