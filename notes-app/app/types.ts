@@ -5,6 +5,7 @@ export type RootStackParamList = {
     CreateNote: undefined;
     Home: undefined;
     AllNotes: undefined;
+    EditNote: { noteId: string };
 };
 
 
