@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
-import { app, FIREBASE_AUTH } from '../../FirebaseConfig'; // Deine Firebase-Config-Datei
-
-const db = getFirestore(app); // Verwendet `app` aus der Config-Datei, um die DB zu initialisieren
+import { app, FIREBASE_AUTH } from '../../FirebaseConfig'; 
+const db = getFirestore(app); 
 
 const CreateNote = () => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [imageURL, setImageURL] = useState('');
-    const [userID, setUserID] = useState(''); // Falls du eine User-ID verwenden möchtest
+    const [userID, setUserID] = useState(''); 
     const [message, setMessage] = useState('');
 
     const handleCreateNote = async () => {
@@ -24,7 +23,7 @@ const CreateNote = () => {
                     title: title,
                     description: description,
                     imageURL: imageURL,
-                    userID: user.uid, // Nutze die User-ID falls erforderlich
+                    userID: user.uid, 
                     createdAt: new Date(),
                 });
                 setMessage('Notiz erfolgreich erstellt!');
