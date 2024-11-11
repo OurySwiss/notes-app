@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Animated, Alert } from 'react-native';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
-import { collection, getDocs, getFirestore, query, where, arrayRemove } from 'firebase/firestore';
+import { collection, getDocs, getFirestore, query, where } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -22,57 +22,63 @@ const AllNotes: React.FC = () => {
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'AllNotes'>>();
     const [buttonScale] = useState(new Animated.Value(1));
 
+    const fetchNotes = async () => {
+        const currentUser = FIREBASE_AUTH.currentUser;
+        if (!currentUser) {
+            Alert.alert("Fehler", "Kein angemeldeter Benutzer gefunden.");
+            return;
+        }
+
+        try {
+            const notesRef = collection(db, 'notes');
+            const createdNotesQuery = query(
+                notesRef,
+                where('userID', '==', currentUser.uid)
+            );
+
+            const sharedNotesQuery = query(
+                notesRef,
+                where('sharedWith', 'array-contains', currentUser.uid)
+            );
+
+            const [createdNotesSnapshot, sharedNotesSnapshot] = await Promise.all([
+                getDocs(createdNotesQuery),
+                getDocs(sharedNotesQuery)
+            ]);
+
+            const createdNotes = createdNotesSnapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+            })) as Note[];
+
+            const sharedNotes = sharedNotesSnapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+            })) as Note[];
+
+            const combinedNotes = [
+                ...createdNotes,
+                ...sharedNotes.filter(
+                    (sharedNote) => !createdNotes.some((createdNote) => createdNote.id === sharedNote.id)
+                ),
+            ];
+
+            setNotes(combinedNotes);
+        } catch (error) {
+            console.error('Fehler beim Abrufen der Notizen:', error);
+            Alert.alert("Fehler", "Fehler beim Abrufen der Notizen.");
+        }
+    };
+
     useEffect(() => {
-        const fetchNotes = async () => {
-            const currentUser = FIREBASE_AUTH.currentUser;
-            if (!currentUser) {
-                Alert.alert("Fehler", "Kein angemeldeter Benutzer gefunden.");
-                return;
-            }
-
-            try {
-                const notesRef = collection(db, 'notes');
-                const createdNotesQuery = query(
-                    notesRef,
-                    where('userID', '==', currentUser.uid)
-                );
-
-                const sharedNotesQuery = query(
-                    notesRef,
-                    where('sharedWith', 'array-contains', currentUser.uid)
-                );
-
-                const [createdNotesSnapshot, sharedNotesSnapshot] = await Promise.all([
-                    getDocs(createdNotesQuery),
-                    getDocs(sharedNotesQuery)
-                ]);
-
-                const createdNotes = createdNotesSnapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                })) as Note[];
-
-                const sharedNotes = sharedNotesSnapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                })) as Note[];
-
-                const combinedNotes = [
-                    ...createdNotes,
-                    ...sharedNotes.filter(
-                        (sharedNote) => !createdNotes.some((createdNote) => createdNote.id === sharedNote.id)
-                    ),
-                ];
-
-                setNotes(combinedNotes);
-            } catch (error) {
-                console.error('Fehler beim Abrufen der Notizen:', error);
-                Alert.alert("Fehler", "Fehler beim Abrufen der Notizen.");
-            }
-        };
-
         fetchNotes();
-    }, []);
+
+        const unsubscribe = navigation.addListener('focus', () => {
+            fetchNotes();
+        });
+
+        return unsubscribe;
+    }, [navigation]);
 
     const handlePlusButtonPressIn = () => {
         Animated.spring(buttonScale, {

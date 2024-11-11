@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, Alert, FlatList } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Modal } from 'react-native';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { doc, getDoc, updateDoc, deleteDoc, getFirestore, arrayUnion, collection, query, where, getDocs, arrayRemove } from 'firebase/firestore';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,6 +23,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const [shareUsername, setShareUsername] = useState('');
     const [message, setMessage] = useState('');
     const [sharedWith, setSharedWith] = useState<{ uid: string, username: string }[]>([]);
+    const [modalVisible, setModalVisible] = useState(false);
 
     useEffect(() => {
         const fetchNote = async () => {
@@ -51,7 +52,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 setSharedWith([]);
                 return;
             }
-    
+
             const usersRef = collection(db, 'userProfile');
             const usersQuery = query(usersRef, where('uid', 'in', sharedUIDs));
             const usersSnapshot = await getDocs(usersQuery);
@@ -80,16 +81,26 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = () => {
+        setModalVisible(true);
+    };
+    
+    const handleConfirmDelete = async () => {
         try {
-            const noteRef = doc(db, 'notes', noteId);
-            await deleteDoc(noteRef);
+            const noteRef = doc(db, 'notes', noteId); 
+            await deleteDoc(noteRef); 
             setMessage('Notiz erfolgreich gelöscht!');
-            navigation.goBack();
+            setModalVisible(false);
+            navigation.goBack(); 
         } catch (error) {
             console.error('Fehler beim Löschen der Notiz:', error);
             setMessage('Fehler beim Löschen der Notiz.');
+            setModalVisible(false); 
         }
+    };
+    
+    const handleCancelDelete = () => {
+        setModalVisible(false);
     };
 
     const handleShareNote = async () => {
@@ -155,28 +166,29 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 multiline
             />
             {message ? <Text style={styles.message}>{message}</Text> : null}
+
             <Text style={styles.shareHeading1}>Notiz teilen</Text>
 
             {sharedWith.length > 0 && (
-    <>
-        <Text style={styles.shareHeading2}>Geteilt mit:</Text>
-        <FlatList
-            style={styles.sharedUsersList}
-            data={sharedWith}
-            keyExtractor={(item) => item.uid}
-            renderItem={({ item }) => (
-                <View style={styles.sharedUserContainer}>
-                    <Text style={styles.sharedUserText}>{item.username}</Text>
-                    <TouchableOpacity onPress={() => removeSharedUser(item.uid)} style={styles.removeButton}>
-                        <Text style={styles.removeButtonText}>X</Text>
-                    </TouchableOpacity>
+                <View style={styles.sharedWithContainer}>
+                    <Text style={styles.shareHeading2}>Geteilt mit:</Text>
+                    <FlatList
+                        data={sharedWith}
+                        keyExtractor={(item) => item.uid}
+                        renderItem={({ item }) => (
+                            <View style={styles.sharedUserContainer}>
+                                <Text style={styles.sharedUserText}>{item.username}</Text>
+                                <TouchableOpacity onPress={() => removeSharedUser(item.uid)} style={styles.removeButton}>
+                                    <Text style={styles.removeButtonText}>X</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    />
                 </View>
             )}
-        />
-    </>
-)}
+
             <TextInput
-                style={styles.input}
+                style={[styles.input, styles.usernameInput]}
                 placeholder="Benutzername eingeben"
                 value={shareUsername}
                 onChangeText={setShareUsername}
@@ -193,6 +205,33 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     <Text style={styles.buttonTextWhite}>Save</Text>
                 </TouchableOpacity>
             </View>
+            
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={modalVisible}
+                onRequestClose={handleCancelDelete}
+            >
+                <View style={styles.centeredView}>
+                    <View style={styles.modalView}>
+                        <Text style={styles.modalText}>Möchten Sie diese Notiz wirklich löschen?</Text>
+                        <View style={styles.modalButtonsContainer}>
+                            <TouchableOpacity
+                                style={styles.modalButton}
+                                onPress={handleCancelDelete}
+                            >
+                                <Text style={styles.modalButtonText}>Abbrechen</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.modalButton}
+                                onPress={handleConfirmDelete}
+                            >
+                                <Text style={styles.modalButtonText}>Löschen</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -215,6 +254,57 @@ const styles = StyleSheet.create({
         color: '#555',
         fontSize: 14,
         marginBottom: 10,
+    },
+    shareHeading1: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginTop: 20,
+        color: '#333',
+        textDecorationLine: 'underline',
+        marginBottom: 8,
+    },
+    sharedWithContainer: {
+        marginBottom: 15,
+    },
+    shareHeading2: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 10,
+        color: '#333',
+    },
+    sharedUserContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 10,
+        borderColor: '#ccc',
+        borderWidth: 1,
+        borderRadius: 5,
+        marginBottom: 8,
+    },
+    sharedUserText: {
+        fontSize: 16,
+        color: '#333',
+    },
+    removeButton: {
+        backgroundColor: 'red',
+        borderRadius: 5,
+        padding: 5,
+    },
+    removeButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+    },
+    usernameInput: {
+        marginTop: 10,
+        backgroundColor: '#eaeaea',
+    },
+    shareButton: {
+        backgroundColor: 'blue',
+        borderRadius: 25,
+        paddingVertical: 12,
+        alignItems: 'center',
+        marginTop: 10,
     },
     buttonContainer: {
         flexDirection: 'row',
@@ -240,51 +330,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         flex: 1,
     },
-    shareHeading1: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginTop: 30,
-        color: '#333',
-        textDecorationLine: 'underline',
-        marginBottom: 18,
-    },
-    shareHeading2: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginTop: 30,
-        color: '#333',
-    },
-    shareButton: {
-        backgroundColor: 'blue',
-        borderRadius: 25,
-        paddingVertical: 12,
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    sharedUserContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 10,
-        borderColor: '#ccc',
-        borderWidth: 1,
-        borderRadius: 5,
-        marginBottom: 8,
-        width: '100%',
-    },
-    sharedUserText: {
-        fontSize: 16,
-        color: '#333',
-    },
-    removeButton: {
-        backgroundColor: 'red',
-        borderRadius: 5,
-        padding: 5,
-    },
-    removeButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-    },
     buttonText: {
         color: 'blue',
         fontSize: 16,
@@ -295,8 +340,51 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
-    sharedUsersList: {
-        marginBottom: 20,
+    centeredView: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalView: {
+        width: 300,
+        padding: 20,
+        backgroundColor: 'white',
+        borderRadius: 20,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    modalText: {
+        fontSize: 18,
+        marginBottom: 15,
+        textAlign: 'center',
+    },
+    modalButtonsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+        width: '100%',
+    },
+    modalButton: {
+        backgroundColor: 'blue',
+        paddingVertical: 10,
+        paddingHorizontal: 15,
+        borderRadius: 10,
+        flex: 1,
+        marginHorizontal: 5,
+        alignItems: 'center',
+    },
+    modalButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
 
