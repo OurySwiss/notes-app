@@ -1,19 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Animated } from 'react-native';
-import { app } from '../../FirebaseConfig';
-import { collection, getDocs, getFirestore, query, where } from 'firebase/firestore';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Animated, Alert } from 'react-native';
+import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
+import { collection, getDocs, getFirestore, query, where, arrayRemove } from 'firebase/firestore';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
-import { FIREBASE_AUTH } from '../../FirebaseConfig';
 
 interface Note {
     id: string;
     title: string;
     description: string;
-    imageURL?: string;
     userID: string;
-    userName?: string;
+    userName?: string; 
+    sharedWith?: string[];
 }
 
 const db = getFirestore(app);
@@ -23,35 +22,57 @@ const AllNotes: React.FC = () => {
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'AllNotes'>>();
     const [buttonScale] = useState(new Animated.Value(1));
 
-    useFocusEffect(
-        React.useCallback(() => {
-            const fetchNotes = async () => {
-                try {
-                    const user = FIREBASE_AUTH.currentUser;
-            
-                    if (user) {
-                        const notesQuery = query(
-                            collection(db, 'notes'),
-                            where('userID', '==', user.uid) 
-                        );
-            
-                        const querySnapshot = await getDocs(notesQuery);
-                        const notesData: Note[] = querySnapshot.docs.map((doc) => ({
-                            id: doc.id,
-                            ...doc.data(),
-                        })) as Note[];
-            
-                        setNotes(notesData);
-                    }
-                } catch (error) {
-                    console.error('Fehler beim Abrufen der Notizen:', error);
-                }
-            };
-            
+    useEffect(() => {
+        const fetchNotes = async () => {
+            const currentUser = FIREBASE_AUTH.currentUser;
+            if (!currentUser) {
+                Alert.alert("Fehler", "Kein angemeldeter Benutzer gefunden.");
+                return;
+            }
 
-            fetchNotes();
-        }, [])
-    );
+            try {
+                const notesRef = collection(db, 'notes');
+                const createdNotesQuery = query(
+                    notesRef,
+                    where('userID', '==', currentUser.uid)
+                );
+
+                const sharedNotesQuery = query(
+                    notesRef,
+                    where('sharedWith', 'array-contains', currentUser.uid)
+                );
+
+                const [createdNotesSnapshot, sharedNotesSnapshot] = await Promise.all([
+                    getDocs(createdNotesQuery),
+                    getDocs(sharedNotesQuery)
+                ]);
+
+                const createdNotes = createdNotesSnapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                })) as Note[];
+
+                const sharedNotes = sharedNotesSnapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                })) as Note[];
+
+                const combinedNotes = [
+                    ...createdNotes,
+                    ...sharedNotes.filter(
+                        (sharedNote) => !createdNotes.some((createdNote) => createdNote.id === sharedNote.id)
+                    ),
+                ];
+
+                setNotes(combinedNotes);
+            } catch (error) {
+                console.error('Fehler beim Abrufen der Notizen:', error);
+                Alert.alert("Fehler", "Fehler beim Abrufen der Notizen.");
+            }
+        };
+
+        fetchNotes();
+    }, []);
 
     const handlePlusButtonPressIn = () => {
         Animated.spring(buttonScale, {
@@ -69,7 +90,7 @@ const AllNotes: React.FC = () => {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.heading}>Notes</Text>
+            <Text style={styles.heading}>Notizen</Text>
             <FlatList
                 data={notes}
                 keyExtractor={(item) => item.id}
@@ -79,21 +100,23 @@ const AllNotes: React.FC = () => {
                         onPress={() => navigation.navigate('EditNote', { noteId: item.id })}
                     >
                         <Text style={styles.noteTitle}>{item.title}</Text>
-                        <Text style={styles.noteUser}>Erstellt von: {item.userName}</Text>
+                        {item.userID !== FIREBASE_AUTH.currentUser?.uid && (
+                            <Text style={styles.noteUser}>Freigegeben von: {item.userName || "Unbekannt"}</Text>
+                        )}
                     </TouchableOpacity>
                 )}
-                contentContainerStyle={{ paddingBottom: 80 }}
             />
-            <TouchableOpacity
+            <Animated.View
                 style={[styles.addButton, { transform: [{ scale: buttonScale }] }]}
-                onPress={() => navigation.navigate('CreateNote')}
-                onPressIn={handlePlusButtonPressIn}
-                onPressOut={handlePlusButtonPressOut}
             >
-                <Animated.View style={styles.fullButtonArea}>
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('CreateNote')}
+                    onPressIn={handlePlusButtonPressIn}
+                    onPressOut={handlePlusButtonPressOut}
+                >
                     <Text style={styles.addButtonText}>+</Text>
-                </Animated.View>
-            </TouchableOpacity>
+                </TouchableOpacity>
+            </Animated.View>
         </View>
     );
 };
@@ -105,9 +128,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#f7f7f7',
     },
     heading: {
-        fontSize: 26,
+        fontSize: 24,
         fontWeight: '700',
-        marginBottom: 20,
+        marginBottom: 10,
         color: '#333',
     },
     note: {
@@ -140,13 +163,6 @@ const styles = StyleSheet.create({
         left: 16,
         right: 16,
         alignItems: 'center',
-        justifyContent: 'center',
-    },
-    fullButtonArea: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: '100%',
-        height: '100%',
     },
     addButtonText: {
         color: 'white',
