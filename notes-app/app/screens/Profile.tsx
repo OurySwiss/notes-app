@@ -12,7 +12,6 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Button,
   Image,
   SafeAreaView,
   StyleSheet,
@@ -96,11 +95,12 @@ const Profile: React.FC = () => {
           `profileImages/${uid}/${new Date().toISOString()}`
         );
         await uploadBytes(storageRef, blob);
+
         uploadedImageUrl = await getDownloadURL(storageRef);
       }
 
       const profileData = {
-        uid, // UID des Benutzers hinzufügen
+        uid,
         username,
         bio,
         imageUrl: uploadedImageUrl,
@@ -132,7 +132,7 @@ const Profile: React.FC = () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [1, 1],
       quality: 1,
     });
 
@@ -143,34 +143,47 @@ const Profile: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Profile</Text>
       {loading ? (
         <Text>Loading...</Text>
       ) : (
         <View style={styles.profileContainer}>
-          <TouchableOpacity onPress={pickImage}>
-            <Image
-              source={{ uri: imageUri || 'https://via.placeholder.com/150' }}
-              style={styles.profileImage}
-            />
+          <TouchableOpacity onPress={pickImage} style={styles.imageContainer}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.profileImage} />
+            ) : (
+              <View style={styles.emptyImagePlaceholder} />
+            )}
           </TouchableOpacity>
           <TextInput
             style={styles.input}
             placeholder="Username"
             value={username}
             onChangeText={setUsername}
+            onFocus={() => {
+              if (username === 'Username') setUsername('');
+            }}
           />
           <TextInput
             style={styles.input}
             placeholder="Bio"
             value={bio}
             onChangeText={setBio}
+            onFocus={() => {
+              if (bio === 'Bio') setBio('');
+            }}
           />
-          <Button
-            title="Save Profile"
+          <TouchableOpacity
+            style={styles.saveButton}
             onPress={handleSaveProfile}
-            color="midnightblue"
-          />
+          >
+            <Text style={styles.saveButtonText}>Save</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => FIREBASE_AUTH.signOut()}
+          >
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
         </View>
       )}
     </SafeAreaView>
@@ -182,32 +195,67 @@ export default Profile;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
-    padding: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileContainer: {
-    flex: 1,
+    alignItems: 'center',
+    width: '100%',
+  },
+  imageContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 2,
+    borderColor: '#888',
+    marginBottom: 30,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   profileImage: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    marginBottom: 20,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+  },
+  emptyImagePlaceholder: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#f0f0f0',
   },
   input: {
-    height: 40,
-    borderColor: 'gray',
-    borderWidth: 1,
-    marginTop: 20,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    height: 50,
     width: '80%',
+    borderRadius: 25,
+    backgroundColor: '#f2f2f2',
+    paddingHorizontal: 20,
+    marginBottom: 15,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  saveButton: {
+    borderWidth: 1,
+    borderColor: '#0000ff',
+    borderRadius: 25,
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    marginBottom: 20,
+  },
+  saveButtonText: {
+    color: '#0000ff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    backgroundColor: '#0000ff',
+    borderRadius: 25,
+    paddingVertical: 10,
+    paddingHorizontal: 70,
+  },
+  logoutButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
