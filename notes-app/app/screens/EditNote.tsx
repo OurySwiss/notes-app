@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
+import { View, TextInput, Button, Text, StyleSheet, Image, FlatList } from 'react-native';
 import { app } from '../../FirebaseConfig';
 import { doc, getDoc, updateDoc, deleteDoc, getFirestore } from 'firebase/firestore';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,6 +19,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const { noteId } = route.params;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [imageURLs, setImageURLs] = useState<string[]>([]); // Hinzufügen des imageURLs-Zustands
     const [message, setMessage] = useState('');
 
     useEffect(() => {
@@ -30,6 +31,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     const noteData = noteSnap.data();
                     setTitle(noteData.title);
                     setDescription(noteData.description);
+                    setImageURLs(noteData.imageURL || []); // Setze imageURLs, falls vorhanden
                 } else {
                     setMessage('Notiz nicht gefunden.');
                 }
@@ -84,6 +86,17 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 onChangeText={setDescription}
                 multiline
             />
+            {/* Bilder unter der Beschreibung anzeigen */}
+            <FlatList
+                data={imageURLs}
+                keyExtractor={(url, index) => index.toString()}
+                renderItem={({ item: url }) => (
+                    <Image source={{ uri: url }} style={styles.image} />
+                )}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.imageContainer}
+            />
             {message ? <Text>{message}</Text> : null}
             <View style={styles.buttonContainer}>
                 <Button title="Delete" onPress={handleDelete} color="red" />
@@ -99,6 +112,16 @@ const styles = StyleSheet.create({
     input: { height: 40, borderColor: 'gray', borderWidth: 1, marginBottom: 10, paddingHorizontal: 8 },
     textArea: { height: 100, textAlignVertical: 'top' },
     buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+    imageContainer: {
+        marginTop: 10,
+        flexDirection: 'row',
+    },
+    image: {
+        width: 80,
+        height: 80,
+        marginRight: 10,
+        borderRadius: 5,
+    },
 });
 
 export default EditNote;
