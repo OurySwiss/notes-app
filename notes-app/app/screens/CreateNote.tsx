@@ -1,43 +1,32 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
-import { app, FIREBASE_AUTH } from '../../FirebaseConfig'; // Deine Firebase-Config-Datei
+import { FIREBASE_AUTH } from '../../FirebaseConfig';
+import { RootStackParamList } from '../types'; 
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-const db = getFirestore(app); // Verwendet `app` aus der Config-Datei, um die DB zu initialisieren
+const db = getFirestore();
 
-const CreateNote = () => {
+const CreateNote: React.FC = () => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
-    const [imageURL, setImageURL] = useState('');
-    const [userID, setUserID] = useState(''); // Falls du eine User-ID verwenden möchtest
-    const [message, setMessage] = useState('');
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-    const handleCreateNote = async () => {
-      const user = FIREBASE_AUTH.currentUser;
-      if (!user) {
-        setMessage('Kein Nutzer angemeldet. Bitte logge dich ein.');
-        return;
-    }
-        if (title && description) {
-            try {
-                await addDoc(collection(db, 'notes'), {
-                    title: title,
-                    description: description,
-                    imageURL: imageURL,
-                    userID: user.uid, // Nutze die User-ID falls erforderlich
-                    createdAt: new Date(),
-                });
-                setMessage('Notiz erfolgreich erstellt!');
-                setTitle('');
-                setDescription('');
-                setImageURL('');
-                setUserID('');
-            } catch (error) {
-                console.error('Fehler beim Erstellen der Notiz: ', error);
-                setMessage('Fehler beim Erstellen der Notiz.');
-            }
-        } else {
-            setMessage('Bitte Titel und Beschreibung eingeben.');
+    const handleSaveNote = async () => {
+        const user = FIREBASE_AUTH.currentUser;
+        const userName = user?.displayName || 'Unknown User';
+
+        try {
+            await addDoc(collection(db, 'notes'), {
+                title,
+                description,
+                userID: user?.uid,
+                userName: userName, 
+            });
+            navigation.navigate('Inside');
+        } catch (error) {
+            console.error('Fehler beim Erstellen der Notiz:', error);
         }
     };
 
@@ -57,23 +46,49 @@ const CreateNote = () => {
                 onChangeText={setDescription}
                 multiline
             />
-            <TextInput
-                style={styles.input}
-                placeholder="Bild-URL"
-                value={imageURL}
-                onChangeText={setImageURL}
-            />
-            <Button title="Notiz erstellen" onPress={handleCreateNote} />
-            {message ? <Text>{message}</Text> : null}
+            <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
+                <Text style={styles.saveButtonText}>Speichern</Text>
+            </TouchableOpacity>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { padding: 20 },
-    heading: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
-    input: { height: 40, borderColor: 'gray', borderWidth: 1, marginBottom: 10, paddingHorizontal: 8 },
-    textArea: { height: 100, textAlignVertical: 'top' },
+    container: {
+        flex: 1,
+        padding: 16,
+        backgroundColor: '#f7f7f7',
+    },
+    heading: {
+        fontSize: 24,
+        fontWeight: '700',
+        marginBottom: 20,
+        color: '#333',
+    },
+    input: {
+        backgroundColor: 'white',
+        padding: 10,
+        borderColor: '#ccc',
+        borderWidth: 1,
+        borderRadius: 8,
+        marginBottom: 12,
+    },
+    textArea: {
+        height: 100,
+        textAlignVertical: 'top',
+    },
+    saveButton: {
+        backgroundColor: 'blue', // Gleiche blaue Farbe wie der Add-Button
+        borderRadius: 5,
+        paddingVertical: 15,
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    saveButtonText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
 });
 
 export default CreateNote;

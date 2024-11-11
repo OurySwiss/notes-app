@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { app } from '../../FirebaseConfig';
 import { doc, getDoc, updateDoc, deleteDoc, getFirestore } from 'firebase/firestore';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -84,21 +84,72 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 onChangeText={setDescription}
                 multiline
             />
-            {message ? <Text>{message}</Text> : null}
+            {message ? <Text style={styles.message}>{message}</Text> : null}
             <View style={styles.buttonContainer}>
-                <Button title="Delete" onPress={handleDelete} color="red" />
-                <Button title="Save" onPress={handleSave} color="blue" />
+                <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                    <Text style={styles.buttonText}>Delete</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                    <Text style={styles.buttonTextWhite}>Save</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { padding: 20 },
-    heading: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
-    input: { height: 40, borderColor: 'gray', borderWidth: 1, marginBottom: 10, paddingHorizontal: 8 },
-    textArea: { height: 100, textAlignVertical: 'top' },
-    buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+    container: { padding: 20, backgroundColor: '#f7f7f7', flex: 1 },
+    heading: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#333' },
+    input: { 
+        backgroundColor: '#eaeaea',
+        padding: 12,
+        borderRadius: 12,
+        fontSize: 16,
+        marginBottom: 15,
+    },
+    textArea: { 
+        height: 150, 
+        textAlignVertical: 'top',
+    },
+    message: {
+        color: '#555',
+        fontSize: 14,
+        marginBottom: 10,
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+    },
+    deleteButton: {
+        backgroundColor: 'white',
+        borderColor: 'blue',
+        borderWidth: 1,
+        borderRadius: 25,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 10,
+    },
+    saveButton: {
+        backgroundColor: 'blue',
+        borderRadius: 25,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+        flex: 1,
+    },
+    buttonText: {
+        color: 'blue',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    buttonTextWhite: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
 });
 
 export default EditNote;
