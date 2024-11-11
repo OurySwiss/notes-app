@@ -23,18 +23,12 @@ const Index: React.FC = () => {
                 title="Neue Notiz erstellen"
                 onPress={() => navigation.navigate('CreateNote')}
             />
-            
+
             <Button
                 title="Alle Notizen"
                 onPress={() => navigation.navigate('AllNotes')}
             />
 
-            {/* Logout-Button */}
-            <Button
-                title="Logout"
-                onPress={() => FIREBASE_AUTH.signOut()}
-                color="red"
-            />
         </View>
     );
 };
