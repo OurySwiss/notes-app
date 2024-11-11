@@ -18,7 +18,7 @@ import EditNote from './app/screens/EditNote';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
-const HomeScreen = () => <Index />;
+const HomeScreen = () => <AllNotes />;
 
 function InsideLayout() {
   return (
