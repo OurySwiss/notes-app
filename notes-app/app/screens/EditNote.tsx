@@ -19,7 +19,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const { noteId } = route.params;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
-    const [imageURLs, setImageURLs] = useState<string[]>([]); // Hinzufügen des imageURLs-Zustands
+    const [imageURLs, setImageURLs] = useState<string[]>([]);
     const [message, setMessage] = useState('');
 
     useEffect(() => {
@@ -31,7 +31,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     const noteData = noteSnap.data();
                     setTitle(noteData.title);
                     setDescription(noteData.description);
-                    setImageURLs(noteData.imageURL || []); // Setze imageURLs, falls vorhanden
+                    setImageURLs(noteData.imageURL || []);
                 } else {
                     setMessage('Notiz nicht gefunden.');
                 }
