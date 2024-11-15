@@ -70,6 +70,11 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     };
 
     const handleSave = async () => {
+        if (!title.trim() || !description.trim()) {
+            setMessage('Titel und Beschreibung dürfen nicht leer sein.');
+            return;
+        }
+        
         try {
             const noteRef = doc(db, 'notes', noteId);
             await updateDoc(noteRef, {
