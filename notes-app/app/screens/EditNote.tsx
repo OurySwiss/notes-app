@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Modal } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Modal, Image } from 'react-native';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { doc, getDoc, updateDoc, deleteDoc, getFirestore, arrayUnion, collection, query, where, getDocs, arrayRemove } from 'firebase/firestore';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
+import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 
 type EditNoteScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditNote'>;
 type EditNoteScreenRouteProp = RouteProp<RootStackParamList, 'EditNote'>;
@@ -20,6 +21,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const { noteId } = route.params;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [imageURLs, setImageURLs] = useState<string[]>([]);
     const [shareUsername, setShareUsername] = useState('');
     const [message, setMessage] = useState('');
     const [sharedWith, setSharedWith] = useState<{ uid: string, username: string }[]>([]);
@@ -34,6 +36,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     const noteData = noteSnap.data();
                     setTitle(noteData.title);
                     setDescription(noteData.description);
+                    setImageURLs(noteData.imageURL || []);
                     await loadSharedUsers(noteData.sharedWith || []);
                 } else {
                     setMessage('Notiz nicht gefunden.');
@@ -72,6 +75,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
             await updateDoc(noteRef, {
                 title,
                 description,
+                imageURL: imageURLs,
             });
             setMessage('Notiz erfolgreich aktualisiert!');
             navigation.goBack();
@@ -84,7 +88,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const handleDelete = () => {
         setModalVisible(true);
     };
-    
+
     const handleConfirmDelete = async () => {
         try {
             const noteRef = doc(db, 'notes', noteId); 
@@ -98,7 +102,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
             setModalVisible(false); 
         }
     };
-    
+
     const handleCancelDelete = () => {
         setModalVisible(false);
     };
@@ -149,6 +153,27 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         }
     };
 
+    const handleImagePicker = () => {
+        const options = {
+            mediaType: 'photo' as const,
+            quality: 1 as PhotoQuality,
+            selectionLimit: 0,
+        };
+
+        launchImageLibrary(options, (response) => {
+            if (response.didCancel) {
+                console.log('User cancelled image picker');
+            } else if (response.errorCode) {
+                console.log('ImagePicker Error: ', response.errorCode);
+            } else if (response.assets) {
+                const newImageURLs = response.assets
+                    .filter((asset) => asset.uri)
+                    .map((asset) => asset.uri as string);
+                setImageURLs((prev) => [...prev, ...newImageURLs]);
+            }
+        });
+    };
+
     return (
         <View style={styles.container}>
             <Text style={styles.heading}>Notiz Bearbeiten</Text>
@@ -166,46 +191,27 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 multiline
             />
             {message ? <Text style={styles.message}>{message}</Text> : null}
-
-            <Text style={styles.shareHeading1}>Notiz teilen</Text>
-
-            {sharedWith.length > 0 && (
-                <View style={styles.sharedWithContainer}>
-                    <Text style={styles.shareHeading2}>Geteilt mit:</Text>
-                    <FlatList
-                        data={sharedWith}
-                        keyExtractor={(item) => item.uid}
-                        renderItem={({ item }) => (
-                            <View style={styles.sharedUserContainer}>
-                                <Text style={styles.sharedUserText}>{item.username}</Text>
-                                <TouchableOpacity onPress={() => removeSharedUser(item.uid)} style={styles.removeButton}>
-                                    <Text style={styles.removeButtonText}>X</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    />
-                </View>
-            )}
-
-            <TextInput
-                style={[styles.input, styles.usernameInput]}
-                placeholder="Benutzername eingeben"
-                value={shareUsername}
-                onChangeText={setShareUsername}
+            <FlatList
+                data={imageURLs}
+                keyExtractor={(url, index) => index.toString()}
+                renderItem={({ item: url }) => (
+                    <Image source={{ uri: url }} style={styles.image} />
+                )}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.imageContainer}
             />
-            <TouchableOpacity style={styles.shareButton} onPress={handleShareNote}>
-                <Text style={styles.buttonTextWhite}>Teilen</Text>
+            <Button title="Add Image" onPress={handleImagePicker} />
+            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                <Text style={styles.saveButtonText}>Speichern</Text>
             </TouchableOpacity>
 
             <View style={styles.buttonContainer}>
                 <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
                     <Text style={styles.buttonText}>Delete</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                    <Text style={styles.buttonTextWhite}>Save</Text>
-                </TouchableOpacity>
             </View>
-            
+
             <Modal
                 animationType="slide"
                 transparent={true}
@@ -255,61 +261,19 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginBottom: 10,
     },
-    shareHeading1: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginTop: 20,
-        color: '#333',
-        textDecorationLine: 'underline',
-        marginBottom: 8,
-    },
-    sharedWithContainer: {
-        marginBottom: 15,
-    },
-    shareHeading2: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 10,
-        color: '#333',
-    },
-    sharedUserContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 10,
-        borderColor: '#ccc',
-        borderWidth: 1,
-        borderRadius: 5,
-        marginBottom: 8,
-    },
-    sharedUserText: {
-        fontSize: 16,
-        color: '#333',
-    },
-    removeButton: {
-        backgroundColor: 'red',
-        borderRadius: 5,
-        padding: 5,
-    },
-    removeButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-    },
-    usernameInput: {
-        marginTop: 10,
-        backgroundColor: '#eaeaea',
-    },
-    shareButton: {
+    saveButton: {
         backgroundColor: 'blue',
         borderRadius: 25,
-        paddingVertical: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
         alignItems: 'center',
-        marginTop: 10,
-    },
-    buttonContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+        flex: 1,
         marginTop: 20,
+    },
+    saveButtonText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
     },
     deleteButton: {
         backgroundColor: 'white',
@@ -322,21 +286,8 @@ const styles = StyleSheet.create({
         flex: 1,
         marginRight: 10,
     },
-    saveButton: {
-        backgroundColor: 'blue',
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        alignItems: 'center',
-        flex: 1,
-    },
     buttonText: {
         color: 'blue',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    buttonTextWhite: {
-        color: 'white',
         fontSize: 16,
         fontWeight: 'bold',
     },
