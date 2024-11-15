@@ -5,16 +5,16 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { FIREBASE_AUTH } from './FirebaseConfig';
-import Index from './app/screens/Index';
 import Login from './app/screens/Login';
 import Profile from './app/screens/Profile';
 import Registration from './app/screens/Registration';
 import { RootStackParamList } from './app/types';
+import CreateNote from './app/screens/CreateNote';
+import AllNotes from './app/screens/AllNotes';
+import EditNote from './app/screens/EditNote';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
-
-const HomeScreen = () => <Index />;
 
 function InsideLayout() {
   return (
@@ -31,7 +31,7 @@ function InsideLayout() {
               iconName = 'person-outline';
               break;
             default:
-              iconName = 'alert-circle-outline'; // Default-Icon für unerwartete Fälle
+              iconName = 'alert-circle-outline';
               break;
           }
 
@@ -41,7 +41,7 @@ function InsideLayout() {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={AllNotes}
         options={{
           tabBarLabel: 'Home',
         }}
@@ -71,11 +71,23 @@ const App = () => {
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login">
         {user ? (
-          <Stack.Screen
-            name="Inside"
-            component={InsideLayout}
-            options={{ headerShown: false }}
-          />
+          <>
+            <Stack.Screen
+              name="Inside"
+              component={InsideLayout}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="CreateNote"
+              component={CreateNote}
+              options={{ title: 'Neue Notiz erstellen' }}
+            />
+            <Stack.Screen
+              name="EditNote"
+              component={EditNote}
+              options={{ title: 'Notiz bearbeiten' }}
+            />
+          </>
         ) : (
           <>
             <Stack.Screen
