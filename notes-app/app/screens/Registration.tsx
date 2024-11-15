@@ -70,7 +70,6 @@ const Registration = () => {
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             if (userCredential.user) {
-                // Set display name after user is created
                 await updateProfile(userCredential.user, { displayName: name });
             }
             setLoading(false);
