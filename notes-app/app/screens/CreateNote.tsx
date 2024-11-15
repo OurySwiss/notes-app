@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, FlatList, Image, Alert } from 'react-native';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
@@ -54,13 +54,13 @@ const CreateNote: React.FC = () => {
                     description,
                     imageURL: imageURLs,
                     userID: user?.uid,
-                    userName: userName, 
+                    userName: userName,
                 });
                 setMessage('Notiz erfolgreich erstellt!');
                 setTitle('');
                 setDescription('');
                 setImageURLs([]);
-                navigation.navigate('Inside'); // Nach dem Speichern weiterleiten
+                navigation.navigate('Inside');
             } catch (error) {
                 console.error('Fehler beim Erstellen der Notiz: ', error);
                 setMessage('Fehler beim Erstellen der Notiz.');
@@ -86,67 +86,83 @@ const CreateNote: React.FC = () => {
                 onChangeText={setDescription}
                 multiline
             />
-            <Button title="Add Image" onPress={handleImagePicker} />
-            <View style={styles.imageContainer}>
-                {imageURLs.map((url, index) => (
-                    <Image key={index} source={{ uri: url }} style={styles.image} />
-                ))}
-            </View>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
-                <Text style={styles.saveButtonText}>Speichern</Text>
+            <FlatList
+                data={imageURLs}
+                keyExtractor={(url, index) => index.toString()}
+                renderItem={({ item: url }) => (
+                    <Image source={{ uri: url }} style={styles.image} />
+                )}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.imageContainer}
+            />
+            <TouchableOpacity style={styles.shareButton} onPress={handleImagePicker}>
+                <Text style={styles.buttonTextWhite}>Bild hinzufügen</Text>
             </TouchableOpacity>
-            {message ? <Text>{message}</Text> : null}
+            <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
+                <Text style={styles.buttonTextWhite}>Speichern</Text>
+            </TouchableOpacity>
+            {message ? <Text style={styles.message}>{message}</Text> : null}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { 
-        flex: 1, 
-        padding: 16, 
+    container: {
+        flex: 1,
+        padding: 16,
         backgroundColor: '#f7f7f7',
     },
-    heading: { 
-        fontSize: 24, 
-        fontWeight: '700', 
-        marginBottom: 20, 
-        color: '#333' 
+    heading: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        color: '#333',
     },
-    input: { 
-        backgroundColor: 'white', 
-        padding: 10, 
-        borderColor: '#ccc', 
-        borderWidth: 1, 
-        borderRadius: 8, 
-        marginBottom: 12 
+    input: {
+        backgroundColor: '#eaeaea',
+        padding: 12,
+        borderRadius: 12,
+        fontSize: 16,
+        marginBottom: 15,
     },
-    textArea: { 
-        height: 100, 
-        textAlignVertical: 'top' 
+    textArea: {
+        height: 100,
+        textAlignVertical: 'top',
     },
     saveButton: {
-        backgroundColor: 'blue', 
-        borderRadius: 5, 
-        paddingVertical: 15, 
-        alignItems: 'center', 
+        backgroundColor: 'blue',
+        borderRadius: 25,
+        paddingVertical: 12,
+        alignItems: 'center',
         marginTop: 20,
     },
-    saveButtonText: {
-        color: 'white', 
-        fontSize: 18, 
-        fontWeight: 'bold',
-    },
-    imageContainer: {
-        flexDirection: 'row', 
-        flexWrap: 'wrap', 
+    shareButton: {
+        backgroundColor: 'blue',
+        borderRadius: 25,
+        paddingVertical: 12,
+        alignItems: 'center',
         marginVertical: 10,
     },
-    image: {
-        width: 100,
-        height: 100,
-        marginRight: 10,
+    buttonTextWhite: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    message: {
+        color: '#555',
+        fontSize: 14,
+        marginTop: 10,
+    },
+    imageContainer: {
+        flexDirection: 'row',
         marginBottom: 10,
-        borderRadius: 8,
+    },
+    image: {
+        width: 80,
+        height: 80,
+        marginRight: 10,
+        borderRadius: 5,
     },
 });
 
