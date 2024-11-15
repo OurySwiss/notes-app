@@ -113,9 +113,10 @@ const AllNotes: React.FC = () => {
                 )}
             />
             <Animated.View
-                style={[styles.addButton, { transform: [{ scale: buttonScale }] }]}
+                style={[styles.addButtonContainer, { transform: [{ scale: buttonScale }] }]}
             >
                 <TouchableOpacity
+                    style={styles.addButton}
                     onPress={() => navigation.navigate('CreateNote')}
                     onPressIn={handlePlusButtonPressIn}
                     onPressOut={handlePlusButtonPressOut}
@@ -159,16 +160,19 @@ const styles = StyleSheet.create({
         color: '#999',
         marginTop: 8,
     },
-    addButton: {
-        backgroundColor: 'blue',
-        borderRadius: 5,
-        paddingVertical: 15,
-        paddingHorizontal: 20,
+    addButtonContainer: {
         position: 'absolute',
         bottom: 20,
         left: 16,
         right: 16,
+    },
+    addButton: {
+        backgroundColor: 'blue',
+        borderRadius: 25,
+        paddingVertical: 15,
         alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
     },
     addButtonText: {
         color: 'white',
