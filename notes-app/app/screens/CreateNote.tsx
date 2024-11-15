@@ -38,6 +38,10 @@ const CreateNote: React.FC = () => {
         });
     };
 
+    const handleRemoveImage = (url: string) => {
+        setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
+    };
+
     const handleSaveNote = async () => {
         const user = FIREBASE_AUTH.currentUser;
         const userName = user?.displayName || 'Unknown User';
@@ -90,7 +94,15 @@ const CreateNote: React.FC = () => {
                 data={imageURLs}
                 keyExtractor={(url, index) => index.toString()}
                 renderItem={({ item: url }) => (
-                    <Image source={{ uri: url }} style={styles.image} />
+                    <View style={styles.imageWrapper}>
+                        <Image source={{ uri: url }} style={styles.image} />
+                        <TouchableOpacity
+                            style={styles.deleteButton}
+                            onPress={() => handleRemoveImage(url)}
+                        >
+                            <Text style={styles.deleteButtonText}>X</Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -158,11 +170,28 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         marginBottom: 10,
     },
+    imageWrapper: {
+        position: 'relative',
+        marginRight: 10,
+    },
     image: {
         width: 80,
         height: 80,
-        marginRight: 10,
         borderRadius: 5,
+    },
+    deleteButton: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        backgroundColor: 'red',
+        borderRadius: 10,
+        padding: 5,
+        zIndex: 1,
+    },
+    deleteButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 12,
     },
 });
 
