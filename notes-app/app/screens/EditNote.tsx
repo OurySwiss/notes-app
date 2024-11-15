@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Modal } from 'react-native';
-import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
-import { doc, getDoc, updateDoc, deleteDoc, getFirestore, arrayUnion, collection, query, where, getDocs, arrayRemove } from 'firebase/firestore';
+import { View, TextInput, Button, Text, StyleSheet, Image, FlatList } from 'react-native';
+import { app } from '../../FirebaseConfig';
+import { doc, getDoc, updateDoc, deleteDoc, getFirestore } from 'firebase/firestore';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
+import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 
 type EditNoteScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditNote'>;
 type EditNoteScreenRouteProp = RouteProp<RootStackParamList, 'EditNote'>;
@@ -20,10 +21,8 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const { noteId } = route.params;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
-    const [shareUsername, setShareUsername] = useState('');
+    const [imageURLs, setImageURLs] = useState<string[]>([]);
     const [message, setMessage] = useState('');
-    const [sharedWith, setSharedWith] = useState<{ uid: string, username: string }[]>([]);
-    const [modalVisible, setModalVisible] = useState(false);
 
     useEffect(() => {
         const fetchNote = async () => {
@@ -34,7 +33,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     const noteData = noteSnap.data();
                     setTitle(noteData.title);
                     setDescription(noteData.description);
-                    await loadSharedUsers(noteData.sharedWith || []);
+                    setImageURLs(noteData.imageURL || []);
                 } else {
                     setMessage('Notiz nicht gefunden.');
                 }
@@ -46,32 +45,13 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         fetchNote();
     }, [noteId]);
 
-    const loadSharedUsers = async (sharedUIDs: string[]) => {
-        try {
-            if (sharedUIDs.length === 0) {
-                setSharedWith([]);
-                return;
-            }
-
-            const usersRef = collection(db, 'userProfile');
-            const usersQuery = query(usersRef, where('uid', 'in', sharedUIDs));
-            const usersSnapshot = await getDocs(usersQuery);
-            const usersData = usersSnapshot.docs.map(doc => ({
-                uid: doc.data().uid,
-                username: doc.data().username,
-            }));
-            setSharedWith(usersData);
-        } catch (error) {
-            console.error('Fehler beim Laden der Benutzernamen:', error);
-        }
-    };
-
     const handleSave = async () => {
         try {
             const noteRef = doc(db, 'notes', noteId);
             await updateDoc(noteRef, {
                 title,
                 description,
+                imageURL: imageURLs,
             });
             setMessage('Notiz erfolgreich aktualisiert!');
             navigation.goBack();
@@ -81,72 +61,37 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         }
     };
 
-    const handleDelete = () => {
-        setModalVisible(true);
-    };
-    
-    const handleConfirmDelete = async () => {
+    const handleDelete = async () => {
         try {
-            const noteRef = doc(db, 'notes', noteId); 
-            await deleteDoc(noteRef); 
+            const noteRef = doc(db, 'notes', noteId);
+            await deleteDoc(noteRef);
             setMessage('Notiz erfolgreich gelöscht!');
-            setModalVisible(false);
-            navigation.goBack(); 
+            navigation.goBack();
         } catch (error) {
             console.error('Fehler beim Löschen der Notiz:', error);
             setMessage('Fehler beim Löschen der Notiz.');
-            setModalVisible(false); 
         }
     };
-    
-    const handleCancelDelete = () => {
-        setModalVisible(false);
-    };
 
-    const handleShareNote = async () => {
-        if (!shareUsername) {
-            Alert.alert("Fehler", "Bitte geben Sie einen Benutzernamen ein.");
-            return;
-        }
+    const handleImagePicker = () => {
+        const options = {
+            mediaType: 'photo' as const,
+            quality: 1 as PhotoQuality,
+            selectionLimit: 0,
+        };
 
-        try {
-            const usersRef = collection(db, 'userProfile');
-            const q = query(usersRef, where('username', '==', shareUsername));
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-                const userDoc = querySnapshot.docs[0];
-                const userIdToShare = userDoc.data().uid;
-
-                const noteRef = doc(db, 'notes', noteId);
-                await updateDoc(noteRef, {
-                    sharedWith: arrayUnion(userIdToShare),
-                });
-
-                setSharedWith(prev => [...prev, { uid: userIdToShare, username: shareUsername }]);
-                Alert.alert("Erfolg", `Notiz erfolgreich für ${shareUsername} freigegeben.`);
-                setShareUsername('');
-            } else {
-                Alert.alert("Fehler", "Benutzername nicht gefunden.");
+        launchImageLibrary(options, (response) => {
+            if (response.didCancel) {
+                console.log('User cancelled image picker');
+            } else if (response.errorCode) {
+                console.log('ImagePicker Error: ', response.errorCode);
+            } else if (response.assets) {
+                const newImageURLs = response.assets
+                    .filter((asset) => asset.uri)
+                    .map((asset) => asset.uri as string);
+                setImageURLs((prev) => [...prev, ...newImageURLs]);
             }
-        } catch (error) {
-            console.error("Fehler beim Teilen der Notiz:", error);
-            Alert.alert("Fehler", "Fehler beim Teilen der Notiz.");
-        }
-    };
-
-    const removeSharedUser = async (userId: string) => {
-        try {
-            const noteRef = doc(db, 'notes', noteId);
-            await updateDoc(noteRef, {
-                sharedWith: arrayRemove(userId),
-            });
-            setSharedWith(prev => prev.filter(user => user.uid !== userId));
-            Alert.alert("Erfolg", "Benutzer wurde entfernt.");
-        } catch (error) {
-            console.error('Fehler beim Entfernen des Benutzers:', error);
-            Alert.alert("Fehler", "Benutzer konnte nicht entfernt werden.");
-        }
+        });
     };
 
     return (
@@ -165,226 +110,41 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 onChangeText={setDescription}
                 multiline
             />
-            {message ? <Text style={styles.message}>{message}</Text> : null}
-
-            <Text style={styles.shareHeading1}>Notiz teilen</Text>
-
-            {sharedWith.length > 0 && (
-                <View style={styles.sharedWithContainer}>
-                    <Text style={styles.shareHeading2}>Geteilt mit:</Text>
-                    <FlatList
-                        data={sharedWith}
-                        keyExtractor={(item) => item.uid}
-                        renderItem={({ item }) => (
-                            <View style={styles.sharedUserContainer}>
-                                <Text style={styles.sharedUserText}>{item.username}</Text>
-                                <TouchableOpacity onPress={() => removeSharedUser(item.uid)} style={styles.removeButton}>
-                                    <Text style={styles.removeButtonText}>X</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    />
-                </View>
-            )}
-
-            <TextInput
-                style={[styles.input, styles.usernameInput]}
-                placeholder="Benutzername eingeben"
-                value={shareUsername}
-                onChangeText={setShareUsername}
+            {message ? <Text>{message}</Text> : null}
+            <FlatList
+                data={imageURLs}
+                keyExtractor={(url, index) => index.toString()}
+                renderItem={({ item: url }) => (
+                    <Image source={{ uri: url }} style={styles.image} />
+                )}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.imageContainer}
             />
-            <TouchableOpacity style={styles.shareButton} onPress={handleShareNote}>
-                <Text style={styles.buttonTextWhite}>Teilen</Text>
-            </TouchableOpacity>
-
+            <Button title="Add Image" onPress={handleImagePicker} />
             <View style={styles.buttonContainer}>
-                <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                    <Text style={styles.buttonText}>Delete</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                    <Text style={styles.buttonTextWhite}>Save</Text>
-                </TouchableOpacity>
+                <Button title="Delete" onPress={handleDelete} color="red" />
+                <Button title="Save" onPress={handleSave} color="blue" />
             </View>
-            
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={modalVisible}
-                onRequestClose={handleCancelDelete}
-            >
-                <View style={styles.centeredView}>
-                    <View style={styles.modalView}>
-                        <Text style={styles.modalText}>Möchten Sie diese Notiz wirklich löschen?</Text>
-                        <View style={styles.modalButtonsContainer}>
-                            <TouchableOpacity
-                                style={styles.modalButton}
-                                onPress={handleCancelDelete}
-                            >
-                                <Text style={styles.modalButtonText}>Abbrechen</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.modalButton}
-                                onPress={handleConfirmDelete}
-                            >
-                                <Text style={styles.modalButtonText}>Löschen</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { padding: 20, backgroundColor: '#f7f7f7', flex: 1 },
-    heading: { fontSize: 25, fontWeight: 'bold', marginBottom: 20, color: '#333' },
-    input: {
-        backgroundColor: '#eaeaea',
-        padding: 12,
-        borderRadius: 12,
-        fontSize: 16,
-        marginBottom: 15,
-    },
-    textArea: {
-        height: 150,
-        textAlignVertical: 'top',
-    },
-    message: {
-        color: '#555',
-        fontSize: 14,
-        marginBottom: 10,
-    },
-    shareHeading1: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginTop: 20,
-        color: '#333',
-        textDecorationLine: 'underline',
-        marginBottom: 8,
-    },
-    sharedWithContainer: {
-        marginBottom: 15,
-    },
-    shareHeading2: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 10,
-        color: '#333',
-    },
-    sharedUserContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 10,
-        borderColor: '#ccc',
-        borderWidth: 1,
-        borderRadius: 5,
-        marginBottom: 8,
-    },
-    sharedUserText: {
-        fontSize: 16,
-        color: '#333',
-    },
-    removeButton: {
-        backgroundColor: 'red',
-        borderRadius: 5,
-        padding: 5,
-    },
-    removeButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-    },
-    usernameInput: {
+    container: { padding: 20 },
+    heading: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
+    input: { height: 40, borderColor: 'gray', borderWidth: 1, marginBottom: 10, paddingHorizontal: 8 },
+    textArea: { height: 100, textAlignVertical: 'top' },
+    buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+    imageContainer: {
         marginTop: 10,
-        backgroundColor: '#eaeaea',
-    },
-    shareButton: {
-        backgroundColor: 'blue',
-        borderRadius: 25,
-        paddingVertical: 12,
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    buttonContainer: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 20,
     },
-    deleteButton: {
-        backgroundColor: 'white',
-        borderColor: 'blue',
-        borderWidth: 1,
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        alignItems: 'center',
-        flex: 1,
+    image: {
+        width: 80,
+        height: 80,
         marginRight: 10,
-    },
-    saveButton: {
-        backgroundColor: 'blue',
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        alignItems: 'center',
-        flex: 1,
-    },
-    buttonText: {
-        color: 'blue',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    buttonTextWhite: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    centeredView: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    },
-    modalView: {
-        width: 300,
-        padding: 20,
-        backgroundColor: 'white',
-        borderRadius: 20,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    modalText: {
-        fontSize: 18,
-        marginBottom: 15,
-        textAlign: 'center',
-    },
-    modalButtonsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 20,
-        width: '100%',
-    },
-    modalButton: {
-        backgroundColor: 'blue',
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-        borderRadius: 10,
-        flex: 1,
-        marginHorizontal: 5,
-        alignItems: 'center',
-    },
-    modalButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
+        borderRadius: 5,
     },
 });
 

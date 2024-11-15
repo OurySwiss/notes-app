@@ -32,11 +32,6 @@ const Registration = () => {
     const navigation = useNavigation<RegistrationScreenNavigationProp>();
     const auth = FIREBASE_AUTH;
 
-    function validatePassword(password: string) {
-        const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
-        return regex.test(password);
-    }
-
     const validateEmail = (email: string) => {
         const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return regex.test(email);
@@ -52,8 +47,6 @@ const Registration = () => {
         setPasswordError('');
         setConfirmPasswordError('');
 
-        /*
-        ToDo: Fix validation, currently not working
         let valid = true;
 
         if (!validateName(name)) {
@@ -66,26 +59,19 @@ const Registration = () => {
             valid = false;
         }
 
-        if (!validatePassword(password)) {
-            setPasswordError('Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number and one special character');
-            valid = false;
-        }
-
-
         if (password !== confirmPassword) {
             setConfirmPasswordError('Passwords do not match');
             valid = false;
         }
 
         if (!valid) return;
-*/
+
         setLoading(true);
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             if (userCredential.user) {
-                await updateProfile(userCredential.user, {
-                    displayName: name,
-                });
+                // Set display name after user is created
+                await updateProfile(userCredential.user, { displayName: name });
             }
             setLoading(false);
             alert('Successfully created User');
@@ -200,7 +186,7 @@ const styles = StyleSheet.create({
         padding: 10,
         backgroundColor: '#f9f9f9',
         borderColor: '#ccc',
-        paddingRight: 40, // Added padding to the right for the icon
+        paddingRight: 40,
     },
     icon: {
         position: 'absolute',
