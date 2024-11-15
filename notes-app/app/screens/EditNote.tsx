@@ -5,6 +5,7 @@ import { doc, getDoc, updateDoc, deleteDoc, getFirestore } from 'firebase/firest
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
+import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 
 type EditNoteScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditNote'>;
 type EditNoteScreenRouteProp = RouteProp<RootStackParamList, 'EditNote'>;
@@ -13,7 +14,8 @@ interface Props {
     navigation: EditNoteScreenNavigationProp;
     route: EditNoteScreenRouteProp;
 }
-const db = getFirestore(app); 
+
+const db = getFirestore(app);
 
 const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const { noteId } = route.params;
@@ -47,8 +49,9 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         try {
             const noteRef = doc(db, 'notes', noteId);
             await updateDoc(noteRef, {
-                title: title,
-                description: description,
+                title,
+                description,
+                imageURL: imageURLs,
             });
             setMessage('Notiz erfolgreich aktualisiert!');
             navigation.goBack();
@@ -70,6 +73,27 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         }
     };
 
+    const handleImagePicker = () => {
+        const options = {
+            mediaType: 'photo' as const,
+            quality: 1 as PhotoQuality,
+            selectionLimit: 0,
+        };
+
+        launchImageLibrary(options, (response) => {
+            if (response.didCancel) {
+                console.log('User cancelled image picker');
+            } else if (response.errorCode) {
+                console.log('ImagePicker Error: ', response.errorCode);
+            } else if (response.assets) {
+                const newImageURLs = response.assets
+                    .filter((asset) => asset.uri)
+                    .map((asset) => asset.uri as string);
+                setImageURLs((prev) => [...prev, ...newImageURLs]);
+            }
+        });
+    };
+
     return (
         <View style={styles.container}>
             <Text style={styles.heading}>Notiz Bearbeiten</Text>
@@ -86,7 +110,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 onChangeText={setDescription}
                 multiline
             />
-            {/* Bilder unter der Beschreibung anzeigen */}
+            {message ? <Text>{message}</Text> : null}
             <FlatList
                 data={imageURLs}
                 keyExtractor={(url, index) => index.toString()}
@@ -97,7 +121,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 showsHorizontalScrollIndicator={false}
                 style={styles.imageContainer}
             />
-            {message ? <Text>{message}</Text> : null}
+            <Button title="Add Image" onPress={handleImagePicker} />
             <View style={styles.buttonContainer}>
                 <Button title="Delete" onPress={handleDelete} color="red" />
                 <Button title="Save" onPress={handleSave} color="blue" />
