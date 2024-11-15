@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TouchableOpacity, FlatList, Image, Alert } from 'react-native';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -9,11 +9,18 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 const db = getFirestore(app);
 
+interface SharedUser {
+    uid: string;
+    username: string;
+}
+
 const CreateNote: React.FC = () => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [imageURLs, setImageURLs] = useState<string[]>([]);
     const [message, setMessage] = useState('');
+    const [shareUsername, setShareUsername] = useState('');
+    const [sharedWith, setSharedWith] = useState<SharedUser[]>([]);
 
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -38,6 +45,40 @@ const CreateNote: React.FC = () => {
         });
     };
 
+    const handleAddShareUser = async () => {
+        if (!shareUsername.trim()) {
+            Alert.alert("Fehler", "Benutzername darf nicht leer sein.");
+            return;
+        }
+
+        try {
+            const usersRef = collection(db, 'userProfile');
+            const q = query(usersRef, where('username', '==', shareUsername.trim()));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0];
+                const userData = userDoc.data();
+                const userToShare: SharedUser = {
+                    uid: userData.uid,
+                    username: userData.username,
+                };
+
+                setSharedWith((prev) => [...prev, userToShare]);
+                setShareUsername('');
+            } else {
+                Alert.alert("Fehler", "Benutzername nicht gefunden.");
+            }
+        } catch (error) {
+            console.error("Fehler beim Hinzufügen des Benutzers zur Freigabe:", error);
+            Alert.alert("Fehler", "Fehler beim Hinzufügen des Benutzers zur Freigabe.");
+        }
+    };
+
+    const removeSharedUser = (uid: string) => {
+        setSharedWith((prev) => prev.filter((user) => user.uid !== uid));
+    };
+
     const handleSaveNote = async () => {
         const user = FIREBASE_AUTH.currentUser;
         const userName = user?.displayName || 'Unknown User';
@@ -53,16 +94,18 @@ const CreateNote: React.FC = () => {
                     title,
                     description,
                     imageURL: imageURLs,
-                    userID: user?.uid,
+                    userID: user.uid,
                     userName: userName,
+                    sharedWith: sharedWith.map((user) => user.uid),  // nur die UIDs speichern
                 });
                 setMessage('Notiz erfolgreich erstellt!');
                 setTitle('');
                 setDescription('');
                 setImageURLs([]);
+                setSharedWith([]);
                 navigation.navigate('Inside');
             } catch (error) {
-                console.error('Fehler beim Erstellen der Notiz: ', error);
+                console.error('Fehler beim Erstellen der Notiz:', error);
                 setMessage('Fehler beim Erstellen der Notiz.');
             }
         } else {
@@ -99,6 +142,32 @@ const CreateNote: React.FC = () => {
             <TouchableOpacity style={styles.shareButton} onPress={handleImagePicker}>
                 <Text style={styles.buttonTextWhite}>Bild hinzufügen</Text>
             </TouchableOpacity>
+
+            <TextInput
+                style={styles.input}
+                placeholder="Benutzername zum Teilen eingeben"
+                value={shareUsername}
+                onChangeText={setShareUsername}
+            />
+            <TouchableOpacity style={styles.shareButton} onPress={handleAddShareUser}>
+                <Text style={styles.buttonTextWhite}>Benutzer zur Freigabe hinzufügen</Text>
+            </TouchableOpacity>
+
+            {/* Anzeige der geteilten Benutzer mit Entfernen-Option */}
+            {sharedWith.length > 0 && (
+                <View style={styles.sharedWithContainer}>
+                    <Text style={styles.shareHeading}>Geteilt mit:</Text>
+                    {sharedWith.map((user) => (
+                        <View key={user.uid} style={styles.sharedUserContainer}>
+                            <Text style={styles.sharedUserText}>{user.username}</Text>
+                            <TouchableOpacity onPress={() => removeSharedUser(user.uid)} style={styles.removeButton}>
+                                <Text style={styles.removeButtonText}>X</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+                </View>
+            )}
+
             <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
                 <Text style={styles.buttonTextWhite}>Speichern</Text>
             </TouchableOpacity>
@@ -163,6 +232,38 @@ const styles = StyleSheet.create({
         height: 80,
         marginRight: 10,
         borderRadius: 5,
+    },
+    sharedWithContainer: {
+        marginVertical: 10,
+    },
+    shareHeading: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    sharedUserContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 8,
+        borderColor: '#ccc',
+        borderWidth: 1,
+        borderRadius: 5,
+        marginBottom: 8,
+    },
+    sharedUserText: {
+        fontSize: 14,
+        color: '#333',
+    },
+    removeButton: {
+        backgroundColor: 'red',
+        borderRadius: 5,
+        padding: 5,
+    },
+    removeButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
     },
 });
 
