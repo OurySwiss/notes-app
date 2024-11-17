@@ -1,7 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Image } from 'react-native';
 import { app } from '../../FirebaseConfig';
-import { doc, getDoc, updateDoc, deleteDoc, getFirestore, arrayUnion, collection, query, where, getDocs, arrayRemove } from 'firebase/firestore';
+import {
+    doc,
+    getDoc,
+    updateDoc,
+    deleteDoc,
+    getFirestore,
+    collection,
+    query,
+    where,
+    getDocs,
+} from 'firebase/firestore';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
@@ -17,12 +27,19 @@ interface Props {
 
 const db = getFirestore(app);
 
+interface SharedUser {
+    uid: string;
+    username: string;
+}
+
 const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const { noteId } = route.params;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [imageURLs, setImageURLs] = useState<string[]>([]);
     const [message, setMessage] = useState('');
+    const [shareUsername, setShareUsername] = useState('');
+    const [sharedWith, setSharedWith] = useState<SharedUser[]>([]);
 
     useEffect(() => {
         const fetchNote = async () => {
@@ -34,6 +51,19 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     setTitle(noteData.title);
                     setDescription(noteData.description);
                     setImageURLs(noteData.imageURL || []);
+
+                    // Fetch shared user details
+                    const sharedUserIDs = noteData.sharedWith || [];
+                    const usersCollection = collection(db, 'userProfile');
+                    const userQuery = query(usersCollection, where('uid', 'in', sharedUserIDs));
+                    const userSnapshot = await getDocs(userQuery);
+
+                    const fetchedUsers = userSnapshot.docs.map((doc) => ({
+                        uid: doc.id,
+                        username: doc.data().username,
+                    }));
+
+                    setSharedWith(fetchedUsers);
                 } else {
                     setMessage('Notiz nicht gefunden.');
                 }
@@ -66,6 +96,40 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         });
     };
 
+    const handleAddShareUser = async () => {
+        if (!shareUsername.trim()) {
+            Alert.alert('Fehler', 'Benutzername darf nicht leer sein.');
+            return;
+        }
+
+        try {
+            const usersRef = collection(db, 'userProfile');
+            const q = query(usersRef, where('username', '==', shareUsername.trim()));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0];
+                const userData = userDoc.data();
+                const userToShare: SharedUser = {
+                    uid: userData.uid,
+                    username: userData.username,
+                };
+
+                setSharedWith((prev) => [...prev, userToShare]);
+                setShareUsername('');
+            } else {
+                Alert.alert('Fehler', 'Benutzername nicht gefunden.');
+            }
+        } catch (error) {
+            console.error('Fehler beim Hinzufügen des Benutzers zur Freigabe:', error);
+            Alert.alert('Fehler', 'Fehler beim Hinzufügen des Benutzers zur Freigabe.');
+        }
+    };
+
+    const removeSharedUser = (uid: string) => {
+        setSharedWith((prev) => prev.filter((user) => user.uid !== uid));
+    };
+
     const handleRemoveImage = (url: string) => {
         setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
     };
@@ -75,13 +139,14 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
             setMessage('Titel und Beschreibung dürfen nicht leer sein.');
             return;
         }
-        
+
         try {
             const noteRef = doc(db, 'notes', noteId);
             await updateDoc(noteRef, {
                 title,
                 description,
                 imageURL: imageURLs,
+                sharedWith: sharedWith.map((user) => user.uid),
             });
             setMessage('Notiz erfolgreich aktualisiert!');
             navigation.goBack();
@@ -119,7 +184,6 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 onChangeText={setDescription}
                 multiline
             />
-            {message ? <Text style={styles.message}>{message}</Text> : null}
             <FlatList
                 data={imageURLs}
                 keyExtractor={(url, index) => index.toString()}
@@ -141,6 +205,34 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
             <TouchableOpacity style={styles.shareButton} onPress={handleImagePicker}>
                 <Text style={styles.buttonTextWhite}>Bild hinzufügen</Text>
             </TouchableOpacity>
+
+            <TextInput
+                style={styles.input}
+                placeholder="Benutzername zum Teilen eingeben"
+                value={shareUsername}
+                onChangeText={setShareUsername}
+            />
+            <TouchableOpacity style={styles.shareButton} onPress={handleAddShareUser}>
+                <Text style={styles.buttonTextWhite}>Benutzer zur Freigabe hinzufügen</Text>
+            </TouchableOpacity>
+
+            {sharedWith.length > 0 && (
+                <View style={styles.sharedWithContainer}>
+                    <Text style={styles.shareHeading}>Geteilt mit:</Text>
+                    {sharedWith.map((user) => (
+                        <View key={user.uid} style={styles.sharedUserContainer}>
+                            <Text style={styles.sharedUserText}>{user.username}</Text>
+                            <TouchableOpacity
+                                onPress={() => removeSharedUser(user.uid)}
+                                style={styles.removeButton}
+                            >
+                                <Text style={styles.removeButtonText}>X</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+                </View>
+            )}
+
             <View style={styles.buttonContainer}>
                 <TouchableOpacity style={styles.deleteButtonContainer} onPress={handleDelete}>
                     <Text style={styles.buttonText}>Löschen</Text>
@@ -149,6 +241,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     <Text style={styles.buttonTextWhite}>Speichern</Text>
                 </TouchableOpacity>
             </View>
+            {message ? <Text style={styles.message}>{message}</Text> : null}
         </View>
     );
 };
@@ -173,13 +266,13 @@ const styles = StyleSheet.create({
         marginBottom: 15,
     },
     textArea: {
-        height: 150,
+        height: 100,
         textAlignVertical: 'top',
     },
     message: {
         color: '#555',
         fontSize: 14,
-        marginBottom: 10,
+        marginTop: 10,
     },
     imageContainer: {
         flexDirection: 'row',
@@ -213,7 +306,7 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         paddingVertical: 12,
         alignItems: 'center',
-        marginTop: 10,
+        marginVertical: 10,
     },
     buttonContainer: {
         flexDirection: 'row',
@@ -247,6 +340,38 @@ const styles = StyleSheet.create({
     buttonTextWhite: {
         color: 'white',
         fontSize: 16,
+        fontWeight: 'bold',
+    },
+    sharedWithContainer: {
+        marginVertical: 10,
+    },
+    shareHeading: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    sharedUserContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 8,
+        borderColor: '#ccc',
+        borderWidth: 1,
+        borderRadius: 5,
+        marginBottom: 8,
+    },
+    sharedUserText: {
+        fontSize: 14,
+        color: '#333',
+    },
+    removeButton: {
+        backgroundColor: 'red',
+        borderRadius: 5,
+        padding: 5,
+    },
+    removeButtonText: {
+        color: 'white',
         fontWeight: 'bold',
     },
 });
