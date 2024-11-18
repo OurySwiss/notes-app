@@ -214,7 +214,9 @@ const CreateNote: React.FC = () => {
             setImageURLs([]);
             setSharedWith([]);
             setSelectedCategory(null);
-            navigation.navigate('Inside');
+            setTimeout(() => {
+                navigation.navigate('Inside');
+                }, 1000);
         } catch (error) {
             console.error('Fehler beim Erstellen der Notiz: ', error);
             showModal('Fehler beim Erstellen der Notiz.');
