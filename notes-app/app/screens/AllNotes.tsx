@@ -11,21 +11,45 @@ interface Note {
     title: string;
     description: string;
     userID: string;
-    userName?: string; 
+    userName?: string;
     sharedWith?: string[];
+    category?: string; // Kategorie-ID
+}
+
+interface Category {
+    id: string;
+    name: string;
+    color: string;
 }
 
 const db = getFirestore(app);
 
 const AllNotes: React.FC = () => {
     const [notes, setNotes] = useState<Note[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'AllNotes'>>();
     const [buttonScale] = useState(new Animated.Value(1));
 
+    // Kategorien abrufen
+    const fetchCategories = async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, 'categories'));
+            const fetchedCategories = querySnapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+            })) as Category[];
+            setCategories(fetchedCategories);
+        } catch (error) {
+            console.error('Fehler beim Abrufen der Kategorien:', error);
+            Alert.alert('Fehler', 'Kategorien konnten nicht geladen werden.');
+        }
+    };
+
+    // Notizen abrufen
     const fetchNotes = async () => {
         const currentUser = FIREBASE_AUTH.currentUser;
         if (!currentUser) {
-            Alert.alert("Fehler", "Kein angemeldeter Benutzer gefunden.");
+            Alert.alert('Fehler', 'Kein angemeldeter Benutzer gefunden.');
             return;
         }
 
@@ -43,7 +67,7 @@ const AllNotes: React.FC = () => {
 
             const [createdNotesSnapshot, sharedNotesSnapshot] = await Promise.all([
                 getDocs(createdNotesQuery),
-                getDocs(sharedNotesQuery)
+                getDocs(sharedNotesQuery),
             ]);
 
             const createdNotes = createdNotesSnapshot.docs.map((doc) => ({
@@ -59,21 +83,25 @@ const AllNotes: React.FC = () => {
             const combinedNotes = [
                 ...createdNotes,
                 ...sharedNotes.filter(
-                    (sharedNote) => !createdNotes.some((createdNote) => createdNote.id === sharedNote.id)
+                    (sharedNote) =>
+                        !createdNotes.some((createdNote) => createdNote.id === sharedNote.id)
                 ),
             ];
 
             setNotes(combinedNotes);
         } catch (error) {
             console.error('Fehler beim Abrufen der Notizen:', error);
-            Alert.alert("Fehler", "Fehler beim Abrufen der Notizen.");
+            Alert.alert('Fehler', 'Fehler beim Abrufen der Notizen.');
         }
     };
 
+    // Beide Daten abrufen
     useEffect(() => {
+        fetchCategories();
         fetchNotes();
 
         const unsubscribe = navigation.addListener('focus', () => {
+            fetchCategories();
             fetchNotes();
         });
 
@@ -94,23 +122,38 @@ const AllNotes: React.FC = () => {
         }).start();
     };
 
+    // Kategorie finden
+    const getCategoryDetails = (categoryId: string | undefined) => {
+        return categories.find((category) => category.id === categoryId);
+    };
+
     return (
         <View style={styles.container}>
             <Text style={styles.heading}>Notizen</Text>
             <FlatList
                 data={notes}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                    <TouchableOpacity
-                        style={styles.note}
-                        onPress={() => navigation.navigate('EditNote', { noteId: item.id })}
-                    >
-                        <Text style={styles.noteTitle}>{item.title}</Text>
-                        {item.userID !== FIREBASE_AUTH.currentUser?.uid && (
-                            <Text style={styles.noteUser}>Freigegeben von: {item.userName || "Unbekannt"}</Text>
-                        )}
-                    </TouchableOpacity>
-                )}
+                renderItem={({ item }) => {
+                    const category = getCategoryDetails(item.category);
+                    return (
+                        <TouchableOpacity
+                            style={[styles.note, { borderColor: category?.color || '#ccc' }]}
+                            onPress={() => navigation.navigate('EditNote', { noteId: item.id })}
+                        >
+                            <Text style={styles.noteTitle}>{item.title}</Text>
+                            {category && (
+                                <View style={[styles.categoryBadge, { backgroundColor: category.color }]}>
+                                    <Text style={styles.categoryText}>{category.name}</Text>
+                                </View>
+                            )}
+                            {item.userID !== FIREBASE_AUTH.currentUser?.uid && (
+                                <Text style={styles.noteUser}>
+                                    Freigegeben von: {item.userName || 'Unbekannt'}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
+                    );
+                }}
             />
             <Animated.View
                 style={[styles.addButtonContainer, { transform: [{ scale: buttonScale }] }]}
@@ -120,7 +163,6 @@ const AllNotes: React.FC = () => {
                     onPress={() => navigation.navigate('CreateNote')}
                     onPressIn={handlePlusButtonPressIn}
                     onPressOut={handlePlusButtonPressOut}
-                    testID='add-note-button'
                 >
                     <Text style={styles.addButtonText}>+</Text>
                 </TouchableOpacity>
@@ -148,7 +190,6 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         borderRadius: 25,
         borderWidth: 1,
-        borderColor: '#ccc',
         alignItems: 'center',
     },
     noteTitle: {
@@ -160,6 +201,17 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#999',
         marginTop: 8,
+    },
+    categoryBadge: {
+        marginTop: 10,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 15,
+    },
+    categoryText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: 'white',
     },
     addButtonContainer: {
         position: 'absolute',
