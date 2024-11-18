@@ -7,9 +7,9 @@ import {
     TouchableOpacity,
     FlatList,
     Image,
-    Picker,
     Modal,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
@@ -65,46 +65,67 @@ const CreateNote: React.FC = () => {
     };
 
     const fetchCategories = async () => {
-        try {
-            const querySnapshot = await getDocs(collection(db, 'categories'));
-            const fetchedCategories = querySnapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            })) as Category[];
-            setCategories(fetchedCategories);
-        } catch (error) {
-            console.error('Fehler beim Abrufen der Kategorien:', error);
-            showModal('Kategorien konnten nicht geladen werden.');
-        }
-    };
+    const user = FIREBASE_AUTH.currentUser;
+
+    if (!user) {
+        showModal('Kein Nutzer angemeldet. Bitte logge dich ein.');
+        return;
+    }
+
+    try {
+        // Kategorien nach userID filtern
+        const q = query(collection(db, 'categories'), where('userID', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+        const fetchedCategories = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        })) as Category[];
+        setCategories(fetchedCategories);
+    } catch (error) {
+        console.error('Fehler beim Abrufen der Kategorien:', error);
+        showModal('Kategorien konnten nicht geladen werden.');
+    }
+};
+
+
 
     useEffect(() => {
         fetchCategories();
     }, []);
 
     const handleCreateCategory = async () => {
-        if (!newCategory.trim()) {
-            showModal('Bitte gib einen Namen für die Kategorie ein.');
-            return;
-        }
+    const user = FIREBASE_AUTH.currentUser;
 
-        try {
-            const docRef = await addDoc(collection(db, 'categories'), {
-                name: newCategory,
-                color: selectedColor,
-            });
-            setCategories((prev) => [
-                ...prev,
-                { id: docRef.id, name: newCategory, color: selectedColor },
-            ]);
-            setNewCategory('');
-            setSelectedColor(COLORS[0]);
-            showModal('Kategorie erfolgreich erstellt!');
-        } catch (error) {
-            console.error('Fehler beim Erstellen der Kategorie:', error);
-            showModal('Kategorie konnte nicht erstellt werden.');
-        }
-    };
+    if (!user) {
+        showModal('Kein Nutzer angemeldet. Bitte logge dich ein.');
+        return;
+    }
+
+    if (!newCategory.trim()) {
+        showModal('Bitte gib einen Namen für die Kategorie ein.');
+        return;
+    }
+
+    try {
+        const docRef = await addDoc(collection(db, 'categories'), {
+            name: newCategory,
+            color: selectedColor,
+            userID: user.uid, // Nutzer-ID hinzufügen
+        });
+        setCategories((prev) => [
+            ...prev,
+            { id: docRef.id, name: newCategory, color: selectedColor, userID: user.uid },
+        ]);
+        setNewCategory('');
+        setSelectedColor(COLORS[0]);
+        showModal('Kategorie erfolgreich erstellt!');
+    } catch (error) {
+        console.error('Fehler beim Erstellen der Kategorie:', error);
+        showModal('Kategorie konnte nicht erstellt werden.');
+    }
+};
+
+
 
     const handleDeleteCategory = async (categoryId: string) => {
         try {
@@ -251,7 +272,7 @@ const CreateNote: React.FC = () => {
                     <Picker
                         selectedValue={selectedCategory}
                         style={styles.picker}
-                        onValueChange={(itemValue) => setSelectedCategory(itemValue)}
+                        onValueChange={(itemValue: React.SetStateAction<string | null>) => setSelectedCategory(itemValue)}
                     >
                         <Picker.Item label="Kategorie auswählen" value="" />
                         {categories.map((category) => (
