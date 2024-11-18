@@ -58,47 +58,38 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const [sharedWith, setSharedWith] = useState<SharedUser[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>("");
-    const [isOwner, setIsOwner] = useState(false);
-
 
     useEffect(() => {
         const fetchNote = async () => {
-        try {
-            const noteRef = doc(db, 'notes', noteId);
-            const noteSnap = await getDoc(noteRef);
-            if (noteSnap.exists()) {
-                const noteData = noteSnap.data();
-                setTitle(noteData.title);
-                setDescription(noteData.description);
-                setImageURLs(noteData.imageURL || []);
-                setSelectedCategory(noteData.category || null);
+            try {
+                const noteRef = doc(db, 'notes', noteId);
+                const noteSnap = await getDoc(noteRef);
+                if (noteSnap.exists()) {
+                    const noteData = noteSnap.data();
+                    setTitle(noteData.title);
+                    setDescription(noteData.description);
+                    setImageURLs(noteData.imageURL || []);
+                    setSelectedCategory(noteData.category || null);
 
-                const currentUser = FIREBASE_AUTH.currentUser;
-                if (currentUser && currentUser.uid === noteData.ownerId) {
-                    setIsOwner(true);
+                    const sharedUserIDs = noteData.sharedWith || [];
+                    const usersCollection = collection(db, 'userProfile');
+                    const userQuery = query(usersCollection, where('uid', 'in', sharedUserIDs));
+                    const userSnapshot = await getDocs(userQuery);
+
+                    const fetchedUsers = userSnapshot.docs.map((doc) => ({
+                        uid: doc.id,
+                        username: doc.data().username,
+                    }));
+
+                    setSharedWith(fetchedUsers);
                 } else {
-                    setIsOwner(false);
+                    setMessage('Notiz nicht gefunden.');
                 }
-
-                const sharedUserIDs = noteData.sharedWith || [];
-                const usersCollection = collection(db, 'userProfile');
-                const userQuery = query(usersCollection, where('uid', 'in', sharedUserIDs));
-                const userSnapshot = await getDocs(userQuery);
-
-                const fetchedUsers = userSnapshot.docs.map((doc) => ({
-                    uid: doc.id,
-                    username: doc.data().username,
-                }));
-
-                setSharedWith(fetchedUsers);
-            } else {
-                setMessage('Notiz nicht gefunden.');
+            } catch (error) {
+                console.error('Fehler beim Laden der Notiz:', error);
+                setMessage('Fehler beim Laden der Notiz.');
             }
-        } catch (error) {
-            console.error('Fehler beim Laden der Notiz:', error);
-            setMessage('Fehler beim Laden der Notiz.');
-        }
-    };
+        };
 
         const fetchCategories = async () => {
             const user = FIREBASE_AUTH.currentUser;
@@ -233,7 +224,6 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 placeholder="Titel"
                 value={title}
                 onChangeText={setTitle}
-                editable={isOwner}
             />
             <TextInput
                 style={[styles.input, styles.textArea]}
@@ -241,7 +231,6 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 value={description}
                 onChangeText={setDescription}
                 multiline
-                editable={isOwner}
             />
             <View style={styles.categoryContainer}>
                 <Text style={styles.label}>Kategorie wählen:</Text>
@@ -249,9 +238,8 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     selectedValue={selectedCategory}
                     style={styles.picker}
                     onValueChange={(itemValue) => setSelectedCategory(itemValue)}
-                    enabled={isOwner}
                 >
-                    <Picker.Item label="Kategorie auswählen" value={""} />
+                    <Picker.Item label="Kategorie auswählen" value={""} />{/* Ungültige Auswahl */}
                     {categories.map((category) => (
                         <Picker.Item
                             key={category.id}
@@ -306,26 +294,11 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 ))}
             </View>
             <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                    style={[styles.saveButton, !isOwner && { backgroundColor: '#ccc' }]}
-                    onPress={isOwner ? handleSave : undefined}
-                    disabled={!isOwner}
-                >
-                    <Text style={[styles.buttonTextWhite, !isOwner && { color: '#666' }]}>
-                        Speichern
-                    </Text>
+                <TouchableOpacity style={styles.deleteButtonContainer} onPress={handleDelete}>
+                    <Text style={styles.buttonText}>Löschen</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                    style={[
-                        styles.deleteButtonContainer,
-                        !isOwner && { borderColor: '#ccc' },
-                    ]}
-                    onPress={isOwner ? handleDelete : undefined}
-                    disabled={!isOwner}
-                >
-                    <Text style={[styles.buttonText, !isOwner && { color: '#666' }]}>
-                        Löschen
-                    </Text>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                    <Text style={styles.buttonTextWhite}>Speichern</Text>
                 </TouchableOpacity>
             </View>
             {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
