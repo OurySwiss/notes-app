@@ -306,7 +306,6 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 ))}
             </View>
             <View style={styles.buttonContainer}>
-                {/* Speichern-Button */}
                 <TouchableOpacity
                     style={[styles.saveButton, !isOwner && { backgroundColor: '#ccc' }]}
                     onPress={isOwner ? handleSave : undefined}
@@ -316,8 +315,6 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                         Speichern
                     </Text>
                 </TouchableOpacity>
-
-                {/* Löschen-Button */}
                 <TouchableOpacity
                     style={[
                         styles.deleteButtonContainer,
