@@ -1,7 +1,7 @@
 module.exports = {
   preset: 'react-native',
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|expo|@expo|@react-navigation|react-navigation|react-native-vector-icons|firebase|@firebase|expo-image-picker|expo-modules-core|react-native-image-picker)/)',
+    'node_modules/(?!(react-native|@react-native|expo|@expo|@react-navigation|react-navigation|react-native-vector-icons|firebase|@firebase|expo-image-picker|expo-modules-core|react-native-image-picker|react-native-wheel-color-picker)/)',
   ],
   setupFilesAfterEnv: ['@testing-library/jest-native/extend-expect'],
   moduleNameMapper: {
