@@ -1,6 +1,13 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { addDoc, collection, getDocs, getFirestore } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  getDocs,
+  getFirestore,
+  query,
+  where,
+} from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -17,13 +24,18 @@ import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { RootStackParamList } from '../types';
 
+const db = getFirestore(app);
+
+interface SharedUser {
+  uid: string;
+  username: string;
+}
+
 interface Category {
   id: string;
   name: string;
   color: string; // Farbe für die Kategorie
 }
-
-const db = getFirestore(app);
 
 const COLORS = [
   '#FFCDD2',
@@ -39,11 +51,13 @@ const CreateNote: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [imageURLs, setImageURLs] = useState<string[]>([]);
+  const [message, setMessage] = useState('');
+  const [shareUsername, setShareUsername] = useState('');
+  const [sharedWith, setSharedWith] = useState<SharedUser[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState('');
   const [selectedColor, setSelectedColor] = useState<string>(COLORS[0]); // Standardfarbe
-  const [message, setMessage] = useState('');
 
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -92,7 +106,6 @@ const CreateNote: React.FC = () => {
     }
   };
 
-  // Bildauswahl
   const handleImagePicker = () => {
     const options = {
       mediaType: 'photo' as const,
@@ -114,7 +127,42 @@ const CreateNote: React.FC = () => {
     });
   };
 
-  // Notiz speichern
+  const handleAddShareUser = async () => {
+    if (!shareUsername.trim()) {
+      Alert.alert('Fehler', 'Benutzername darf nicht leer sein.');
+      return;
+    }
+
+    try {
+      const usersRef = collection(db, 'userProfile');
+      const q = query(usersRef, where('username', '==', shareUsername.trim()));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        const userData = userDoc.data();
+        const userToShare: SharedUser = {
+          uid: userData.uid,
+          username: userData.username,
+        };
+
+        setSharedWith((prev) => [...prev, userToShare]);
+        setShareUsername('');
+      } else {
+        Alert.alert('Fehler', 'Benutzername nicht gefunden.');
+      }
+    } catch (error) {
+      console.error(
+        'Fehler beim Hinzufügen des Benutzers zur Freigabe:',
+        error
+      );
+      Alert.alert(
+        'Fehler',
+        'Fehler beim Hinzufügen des Benutzers zur Freigabe.'
+      );
+    }
+  };
+
   const handleSaveNote = async () => {
     const user = FIREBASE_AUTH.currentUser;
     const userName = user?.displayName || 'Unknown User';
@@ -135,20 +183,30 @@ const CreateNote: React.FC = () => {
         description,
         imageURL: imageURLs,
         category: selectedCategory,
-        userID: user?.uid,
-        userName: userName,
+        userID: user.uid,
+        userName,
+        sharedWith: sharedWith.map((user) => user.uid),
         createdAt: new Date(),
       });
       setMessage('Notiz erfolgreich erstellt!');
       setTitle('');
       setDescription('');
       setImageURLs([]);
+      setSharedWith([]);
       setSelectedCategory(null);
       navigation.navigate('Inside');
     } catch (error) {
       console.error('Fehler beim Erstellen der Notiz: ', error);
       setMessage('Fehler beim Erstellen der Notiz.');
     }
+  };
+
+  const removeSharedUser = (uid: string) => {
+    setSharedWith((prev) => prev.filter((user) => user.uid !== uid));
+  };
+
+  const handleRemoveImage = (url: string) => {
+    setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
   };
 
   return (
@@ -217,7 +275,15 @@ const CreateNote: React.FC = () => {
         data={imageURLs}
         keyExtractor={(url, index) => index.toString()}
         renderItem={({ item: url }) => (
-          <Image source={{ uri: url }} style={styles.image} />
+          <View style={styles.imageWrapper}>
+            <Image source={{ uri: url }} style={styles.image} />
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleRemoveImage(url)}
+            >
+              <Text style={styles.deleteButtonText}>X</Text>
+            </TouchableOpacity>
+          </View>
         )}
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -226,6 +292,36 @@ const CreateNote: React.FC = () => {
       <TouchableOpacity style={styles.shareButton} onPress={handleImagePicker}>
         <Text style={styles.buttonTextWhite}>Bild hinzufügen</Text>
       </TouchableOpacity>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Benutzername zum Teilen eingeben"
+        value={shareUsername}
+        onChangeText={setShareUsername}
+      />
+      <TouchableOpacity style={styles.shareButton} onPress={handleAddShareUser}>
+        <Text style={styles.buttonTextWhite}>
+          Benutzer zur Freigabe hinzufügen
+        </Text>
+      </TouchableOpacity>
+
+      {sharedWith.length > 0 && (
+        <View style={styles.sharedWithContainer}>
+          <Text style={styles.shareHeading}>Geteilt mit:</Text>
+          {sharedWith.map((user) => (
+            <View key={user.uid} style={styles.sharedUserContainer}>
+              <Text style={styles.sharedUserText}>{user.username}</Text>
+              <TouchableOpacity
+                onPress={() => removeSharedUser(user.uid)}
+                style={styles.removeButton}
+              >
+                <Text style={styles.removeButtonText}>X</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
       <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
         <Text style={styles.buttonTextWhite}>Speichern</Text>
       </TouchableOpacity>
@@ -313,9 +409,59 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginHorizontal: 5,
   },
+  imageWrapper: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    padding: 5,
+    zIndex: 1,
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
   imageContainer: {
     flexDirection: 'row',
     marginVertical: 10,
+  },
+  sharedWithContainer: {
+    marginVertical: 10,
+  },
+  shareHeading: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  sharedUserContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 8,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 5,
+    marginBottom: 8,
+  },
+  sharedUserText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  removeButton: {
+    backgroundColor: 'red',
+    borderRadius: 5,
+    padding: 5,
+  },
+  removeButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   message: {
     color: 'red',
