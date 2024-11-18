@@ -15,6 +15,7 @@ import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ScrollView } from 'react-native';
 
 const db = getFirestore(app);
 
@@ -217,6 +218,8 @@ const CreateNote: React.FC = () => {
     };
 
     return (
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+
         <View style={styles.container}>
             <Text style={styles.heading}>Neue Notiz erstellen</Text>
     
@@ -361,6 +364,8 @@ const CreateNote: React.FC = () => {
                 </View>
             )}
         </View>
+        </ScrollView>
+
     );
     
 };
@@ -568,6 +573,10 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         paddingHorizontal: 8,
         marginBottom: 15,
+    },
+    scrollContainer: {
+        flexGrow: 1,
+        justifyContent: 'space-between', 
     },
 });
 
