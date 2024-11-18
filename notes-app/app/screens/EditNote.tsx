@@ -57,7 +57,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const [shareUsername, setShareUsername] = useState('');
     const [sharedWith, setSharedWith] = useState<SharedUser[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>("");
 
     useEffect(() => {
         const fetchNote = async () => {
@@ -92,27 +92,25 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         };
 
         const fetchCategories = async () => {
-    const user = FIREBASE_AUTH.currentUser;
+            const user = FIREBASE_AUTH.currentUser;
+            if (!user) {
+                console.error('Kein Nutzer angemeldet.');
+                return;
+            }
 
-    if (!user) {
-        console.error('Kein Nutzer angemeldet.');
-        return;
-    }
-
-    try {
-        const q = query(collection(db, 'categories'), where('userID', '==', user.uid));
-        const querySnapshot = await getDocs(q);
-        const fetchedCategories = querySnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as Category[];
-        setCategories(fetchedCategories);
-    } catch (error) {
-        console.error('Fehler beim Abrufen der Kategorien:', error);
-        Alert.alert('Fehler', 'Kategorien konnten nicht geladen werden.');
-    }
-};
-
+            try {
+                const q = query(collection(db, 'categories'), where('userID', '==', user.uid));
+                const querySnapshot = await getDocs(q);
+                const fetchedCategories = querySnapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                })) as Category[];
+                setCategories(fetchedCategories);
+            } catch (error) {
+                console.error('Fehler beim Abrufen der Kategorien:', error);
+                Alert.alert('Fehler', 'Kategorien konnten nicht geladen werden.');
+            }
+        };
 
         fetchNote();
         fetchCategories();
@@ -178,27 +176,33 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     };
 
     const handleSave = async () => {
-        if (!title.trim() || !description.trim() || !selectedCategory) {
-            setMessage('Bitte fülle alle Felder aus und wähle eine Kategorie.');
-            return;
-        }
+    if (!title.trim() || !description.trim()) {
+        setMessage('Bitte fülle alle Felder aus.');
+        return;
+    }
 
-        try {
-            const noteRef = doc(db, 'notes', noteId);
-            await updateDoc(noteRef, {
-                title,
-                description,
-                imageURL: imageURLs,
-                sharedWith: sharedWith.map((user) => user.uid),
-                category: selectedCategory,
-            });
-            setMessage('Notiz erfolgreich aktualisiert!');
-            navigation.goBack();
-        } catch (error) {
-            console.error('Fehler beim Speichern der Notiz:', error);
-            setMessage('Fehler beim Speichern der Notiz.');
-        }
-    };
+    if (!selectedCategory || selectedCategory === "") {
+        setMessage('Bitte wähle eine gültige Kategorie aus.');
+        return;
+    }
+
+    try {
+        const noteRef = doc(db, 'notes', noteId);
+        await updateDoc(noteRef, {
+            title,
+            description,
+            imageURL: imageURLs,
+            sharedWith: sharedWith.map((user) => user.uid),
+            category: selectedCategory,
+        });
+        setMessage('Notiz erfolgreich aktualisiert!');
+        navigation.goBack();
+    } catch (error) {
+        console.error('Fehler beim Speichern der Notiz:', error);
+        setMessage('Fehler beim Speichern der Notiz.');
+    }
+};
+
 
     const handleDelete = async () => {
         try {
@@ -235,16 +239,15 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     style={styles.picker}
                     onValueChange={(itemValue) => setSelectedCategory(itemValue)}
                 >
-                    <Picker.Item label="Kategorie auswählen" value={null} />
+                    <Picker.Item label="Kategorie auswählen" value={""} />{/* Ungültige Auswahl */}
                     {categories.map((category) => (
                         <Picker.Item
                             key={category.id}
                             label={category.name}
                             value={category.id}
                         />
-                        ))}
-                    </Picker>
-
+                    ))}
+                </Picker>
             </View>
             <FlatList
                 data={imageURLs}
@@ -298,11 +301,10 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     <Text style={styles.buttonTextWhite}>Speichern</Text>
                 </TouchableOpacity>
             </View>
-            {message ? <Text style={styles.message}>{message}</Text> : null}
+            {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
         </View>
     );
 };
-
 
 const styles = StyleSheet.create({
     container: {
@@ -433,19 +435,25 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     categoryContainer: {
-        marginBottom: 15, 
+        marginBottom: 15,
     },
     picker: {
-        height: 50, 
+        height: 50,
         borderWidth: 1,
         borderColor: '#ccc',
         borderRadius: 8,
     },
     label: {
         fontSize: 16,
-        fontWeight: '600', 
-        color: '#333', 
-        marginBottom: 8, 
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    errorMessage: {
+        color: 'red',
+        fontSize: 14,
+        marginTop: 10,
+        textAlign: 'center',
     },
 });
 
