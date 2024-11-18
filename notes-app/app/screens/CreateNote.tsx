@@ -7,15 +7,15 @@ import {
     TouchableOpacity,
     FlatList,
     Image,
-    Alert,
     Picker,
 } from 'react-native';
-import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ScrollView } from 'react-native';
 
 const db = getFirestore(app);
 
@@ -27,7 +27,7 @@ interface SharedUser {
 interface Category {
     id: string;
     name: string;
-    color: string; // Farbe für die Kategorie
+    color: string;
 }
 
 const COLORS = [
@@ -38,7 +38,7 @@ const COLORS = [
     '#C5CAE9',
     '#BBDEFB',
     '#B3E5FC',
-]; // Farbauswahl
+];
 
 const CreateNote: React.FC = () => {
     const [title, setTitle] = useState('');
@@ -50,11 +50,16 @@ const CreateNote: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [newCategory, setNewCategory] = useState('');
-    const [selectedColor, setSelectedColor] = useState<string>(COLORS[0]); // Standardfarbe
+    const [selectedColor, setSelectedColor] = useState<string>(COLORS[0]);
+    const [modalVisible, setModalVisible] = useState(false);
 
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-    // Kategorien aus Firestore abrufen
+    const showModal = (msg: string) => {
+        setMessage(msg);
+        setModalVisible(true);
+    };
+
     const fetchCategories = async () => {
         try {
             const querySnapshot = await getDocs(collection(db, 'categories'));
@@ -65,7 +70,7 @@ const CreateNote: React.FC = () => {
             setCategories(fetchedCategories);
         } catch (error) {
             console.error('Fehler beim Abrufen der Kategorien:', error);
-            Alert.alert('Fehler', 'Kategorien konnten nicht geladen werden.');
+            showModal('Kategorien konnten nicht geladen werden.');
         }
     };
 
@@ -73,30 +78,41 @@ const CreateNote: React.FC = () => {
         fetchCategories();
     }, []);
 
-    // Neue Kategorie erstellen
     const handleCreateCategory = async () => {
         if (!newCategory.trim()) {
-            Alert.alert('Fehler', 'Bitte gib einen Namen für die Kategorie ein.');
+            showModal('Bitte gib einen Namen für die Kategorie ein.');
             return;
         }
 
         try {
             const docRef = await addDoc(collection(db, 'categories'), {
                 name: newCategory,
-                color: selectedColor, // Farbe hinzufügen
+                color: selectedColor,
             });
             setCategories((prev) => [
                 ...prev,
                 { id: docRef.id, name: newCategory, color: selectedColor },
             ]);
             setNewCategory('');
-            setSelectedColor(COLORS[0]); // Standardfarbe zurücksetzen
-            Alert.alert('Erfolg', 'Kategorie erfolgreich erstellt!');
+            setSelectedColor(COLORS[0]);
+            showModal('Kategorie erfolgreich erstellt!');
         } catch (error) {
             console.error('Fehler beim Erstellen der Kategorie:', error);
-            Alert.alert('Fehler', 'Kategorie konnte nicht erstellt werden.');
+            showModal('Kategorie konnte nicht erstellt werden.');
         }
     };
+
+    const handleDeleteCategory = async (categoryId: string) => {
+        try {
+            await deleteDoc(doc(db, 'categories', categoryId));            
+            setCategories((prev) => prev.filter((category) => category.id !== categoryId));
+            showModal('Erfolg! Kategorie erfolgreich gelöscht.');
+        } catch (error) {
+            console.error('Fehler beim Löschen der Kategorie:', error);
+            showModal('Fehler! Kategorie konnte nicht gelöscht werden.');
+        }
+    };
+    
 
     const handleImagePicker = () => {
         const options = {
@@ -119,9 +135,18 @@ const CreateNote: React.FC = () => {
         });
     };
 
+    const handleRemoveImage = (url: string) => {
+        setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
+    };
+
     const handleAddShareUser = async () => {
         if (!shareUsername.trim()) {
-            Alert.alert('Fehler', 'Benutzername darf nicht leer sein.');
+            showModal('Benutzername darf nicht leer sein.');
+            return;
+        }
+
+        if (sharedWith.some((user) => user.username === shareUsername.trim())) {
+            showModal('Benutzer wurde bereits hinzugefügt.');
             return;
         }
 
@@ -141,25 +166,30 @@ const CreateNote: React.FC = () => {
                 setSharedWith((prev) => [...prev, userToShare]);
                 setShareUsername('');
             } else {
-                Alert.alert('Fehler', 'Benutzername nicht gefunden.');
+                showModal('Benutzername nicht gefunden.');
             }
         } catch (error) {
             console.error('Fehler beim Hinzufügen des Benutzers zur Freigabe:', error);
-            Alert.alert('Fehler', 'Fehler beim Hinzufügen des Benutzers zur Freigabe.');
+            showModal('Fehler beim Hinzufügen des Benutzers.');
         }
     };
 
+    const removeSharedUser = (uid: string) => {
+        setSharedWith((prev) => prev.filter((user) => user.uid !== uid));
+    };
+
+    
     const handleSaveNote = async () => {
         const user = FIREBASE_AUTH.currentUser;
         const userName = user?.displayName || 'Unknown User';
 
         if (!user) {
-            setMessage('Kein Nutzer angemeldet. Bitte logge dich ein.');
+            showModal('Kein Nutzer angemeldet. Bitte logge dich ein.');
             return;
         }
 
         if (!title || !description || !selectedCategory) {
-            setMessage('Bitte fülle alle Felder aus und wähle eine Kategorie.');
+            showModal('Bitte fülle alle Felder aus und wähle eine Kategorie.');
             return;
         }
 
@@ -174,7 +204,7 @@ const CreateNote: React.FC = () => {
                 sharedWith: sharedWith.map((user) => user.uid),
                 createdAt: new Date(),
             });
-            setMessage('Notiz erfolgreich erstellt!');
+            showModal('Notiz erfolgreich erstellt!');
             setTitle('');
             setDescription('');
             setImageURLs([]);
@@ -183,27 +213,23 @@ const CreateNote: React.FC = () => {
             navigation.navigate('Inside');
         } catch (error) {
             console.error('Fehler beim Erstellen der Notiz: ', error);
-            setMessage('Fehler beim Erstellen der Notiz.');
+            showModal('Fehler beim Erstellen der Notiz.');
         }
     };
 
-    const removeSharedUser = (uid: string) => {
-        setSharedWith((prev) => prev.filter((user) => user.uid !== uid));
-    };
-
-    const handleRemoveImage = (url: string) => {
-        setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
-    };
-
     return (
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+
         <View style={styles.container}>
             <Text style={styles.heading}>Neue Notiz erstellen</Text>
+    
             <TextInput
                 style={styles.input}
                 placeholder="Titel"
                 value={title}
                 onChangeText={setTitle}
             />
+    
             <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Beschreibung"
@@ -211,14 +237,15 @@ const CreateNote: React.FC = () => {
                 onChangeText={setDescription}
                 multiline
             />
+    
             <View style={styles.categoryContainer}>
-                <Text style={styles.label}>Kategorie wählen:</Text>
+                {/* <Text style={styles.label}>Kategorie:</Text> */}
                 <Picker
                     selectedValue={selectedCategory}
                     style={styles.picker}
                     onValueChange={(itemValue) => setSelectedCategory(itemValue)}
                 >
-                    <Picker.Item label="Kategorie auswählen" value="" />
+                    <Picker.Item label="Ausgewählte Kategorie" value="" />
                     {categories.map((category) => (
                         <Picker.Item
                             key={category.id}
@@ -228,6 +255,7 @@ const CreateNote: React.FC = () => {
                     ))}
                 </Picker>
             </View>
+    
             <View style={styles.newCategoryContainer}>
                 <TextInput
                     style={styles.input}
@@ -235,20 +263,30 @@ const CreateNote: React.FC = () => {
                     value={newCategory}
                     onChangeText={setNewCategory}
                 />
-                <View style={styles.colorPalette}>
-                    {COLORS.map((color) => (
-                        <TouchableOpacity
-                            key={color}
-                            style={[
-                                styles.colorCircle,
-                                {
-                                    backgroundColor: color,
-                                    borderWidth: selectedColor === color ? 2 : 0,
-                                },
-                            ]}
-                            onPress={() => setSelectedColor(color)}
-                        />
-                    ))}
+                <Text style={styles.label}>Kategorie auswählen:</Text>
+               <View style={styles.colorPalette}>
+    {categories.map((category) => (
+        <View key={category.id} style={styles.categoryItem}>
+            <TouchableOpacity
+                style={[
+                    styles.colorCircle,
+                    {
+                        backgroundColor: category.color,
+                        borderWidth: selectedCategory === category.id ? 2 : 0,
+                    },
+                ]}
+                onPress={() => setSelectedCategory(category.id)}
+            />
+            <Text style={styles.categoryName}>{category.name}</Text>
+            <TouchableOpacity
+                style={styles.deleteCategoryButton}
+                onPress={() => handleDeleteCategory(category.id)}
+            >
+                <Text style={styles.deleteCategoryText}>X</Text>
+            </TouchableOpacity>
+        </View>
+    ))}
+
                 </View>
                 <TouchableOpacity
                     style={styles.createCategoryButton}
@@ -257,6 +295,7 @@ const CreateNote: React.FC = () => {
                     <Text style={styles.buttonTextWhite}>Kategorie hinzufügen</Text>
                 </TouchableOpacity>
             </View>
+    
             <FlatList
                 data={imageURLs}
                 keyExtractor={(url, index) => index.toString()}
@@ -275,10 +314,11 @@ const CreateNote: React.FC = () => {
                 showsHorizontalScrollIndicator={false}
                 style={styles.imageContainer}
             />
+    
             <TouchableOpacity style={styles.shareButton} onPress={handleImagePicker}>
                 <Text style={styles.buttonTextWhite}>Bild hinzufügen</Text>
             </TouchableOpacity>
-
+    
             <TextInput
                 style={styles.input}
                 placeholder="Benutzername zum Teilen eingeben"
@@ -288,27 +328,46 @@ const CreateNote: React.FC = () => {
             <TouchableOpacity style={styles.shareButton} onPress={handleAddShareUser}>
                 <Text style={styles.buttonTextWhite}>Benutzer zur Freigabe hinzufügen</Text>
             </TouchableOpacity>
-
+    
             {sharedWith.length > 0 && (
                 <View style={styles.sharedWithContainer}>
                     <Text style={styles.shareHeading}>Geteilt mit:</Text>
                     {sharedWith.map((user) => (
                         <View key={user.uid} style={styles.sharedUserContainer}>
                             <Text style={styles.sharedUserText}>{user.username}</Text>
-                            <TouchableOpacity onPress={() => removeSharedUser(user.uid)} style={styles.removeButton}>
+                            <TouchableOpacity
+                                onPress={() => removeSharedUser(user.uid)}
+                                style={styles.removeButton}
+                            >
                                 <Text style={styles.removeButtonText}>X</Text>
                             </TouchableOpacity>
                         </View>
                     ))}
                 </View>
             )}
-
+    
             <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
                 <Text style={styles.buttonTextWhite}>Speichern</Text>
             </TouchableOpacity>
-            {message ? <Text style={styles.message}>{message}</Text> : null}
+    
+            {modalVisible && (
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <Text style={styles.modalText}>{message}</Text>
+                        <TouchableOpacity
+                            style={styles.modalButton}
+                            onPress={() => setModalVisible(false)}
+                        >
+                            <Text style={styles.modalButtonText}>Okay</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </View>
+        </ScrollView>
+
     );
+    
 };
 
 const styles = StyleSheet.create({
@@ -334,36 +393,6 @@ const styles = StyleSheet.create({
         height: 100,
         textAlignVertical: 'top',
     },
-    categoryContainer: {
-        marginBottom: 15,
-    },
-    newCategoryContainer: {
-        marginTop: 15,
-        justifyContent: 'center',
-    },
-    picker: {
-        height: 50,
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-    },
-    colorPalette: {
-        flexDirection: 'row',
-        marginVertical: 10,
-    },
-    colorCircle: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        marginHorizontal: 5,
-        borderColor: 'black',
-    },
-    createCategoryButton: {
-        backgroundColor: 'blue',
-        borderRadius: 25,
-        padding: 10,
-        alignItems: 'center',
-    },
     saveButton: {
         backgroundColor: 'blue',
         borderRadius: 25,
@@ -376,23 +405,31 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         paddingVertical: 12,
         alignItems: 'center',
-        marginVertical: 15,
+        marginVertical: 10,
     },
     buttonTextWhite: {
-        color: '#fff',
+        color: 'white',
         fontSize: 16,
         fontWeight: 'bold',
     },
-    image: {
-        width: 100,
-        height: 100,
-        resizeMode: 'cover',
-        borderRadius: 10,
-        marginHorizontal: 5,
+    message: {
+        color: '#555',
+        fontSize: 14,
+        marginTop: 10,
+    },
+    imageContainer: {
+        flexDirection: 'row',
+        marginBottom: 10,
     },
     imageWrapper: {
         position: 'relative',
         marginRight: 10,
+    },
+    image: {
+        width: 80,
+        height: 80, 
+        borderRadius: 5,
+        resizeMode: 'cover', 
     },
     deleteButton: {
         position: 'absolute',
@@ -407,10 +444,6 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
         fontSize: 12,
-    },
-    imageContainer: {
-        flexDirection: 'row',
-        marginVertical: 10,
     },
     sharedWithContainer: {
         marginVertical: 10,
@@ -444,11 +477,109 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
     },
-    message: {
-        color: 'red',
-        marginTop: 10,
+    modalOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContainer: {
+        backgroundColor: '#fff',
+        padding: 20,
+        borderRadius: 10,
+        width: '80%',
+        alignItems: 'center',
+    },
+    modalText: {
         fontSize: 16,
+        color: '#333',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    modalButton: {
+        backgroundColor: 'blue',
+        borderRadius: 25,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+    },
+    modalButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    colorCircle: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        marginHorizontal: 5,
+        borderColor: 'black',
+    },
+    createCategoryButton: {
+        backgroundColor: 'blue',
+        borderRadius: 25,
+        padding: 10,
+        alignItems: 'center',
+    },
+    categoryContainer: {
+        marginBottom: 15,
+    },
+    newCategoryContainer: {
+        marginTop: 15,
+        justifyContent: 'center',
+    },
+    colorPalette: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginVertical: 10,
+    },
+    categoryItem: {
+        alignItems: 'center',
+        margin: 5,
+    },
+    categoryName: {
+        fontSize: 12,
+        marginTop: 5,
+        textAlign: 'center',
+        color: '#333',
+    },
+    deleteCategoryButton: {
+        marginTop: 5,
+        backgroundColor: 'red',
+        borderRadius: 5,
+        padding: 5,
+        alignItems: 'center',
+    },
+    deleteCategoryText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 10,
+    },
+    label: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    picker: {
+        height: 50,
+        backgroundColor: '#eaeaea',
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        marginBottom: 15,
+    },
+    scrollContainer: {
+        flexGrow: 1,
+        justifyContent: 'space-between', 
     },
 });
+
+
 
 export default CreateNote;
