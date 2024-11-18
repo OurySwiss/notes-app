@@ -251,7 +251,7 @@ const CreateNote: React.FC = () => {
                     <Picker
                         selectedValue={selectedCategory}
                         style={styles.picker}
-                        onValueChange={(itemValue: React.SetStateAction<string | null>) => setSelectedCategory(itemValue)}
+                        onValueChange={(itemValue) => setSelectedCategory(itemValue)}
                     >
                         <Picker.Item label="Kategorie auswählen" value="" />
                         {categories.map((category) => (
