@@ -7,10 +7,10 @@ import {
     TouchableOpacity,
     Alert,
     FlatList,
-    Image,
-    Picker,
+    Image
 } from 'react-native';
-import { app } from '../../FirebaseConfig';
+import { Picker } from '@react-native-picker/picker';
+import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import {
     doc,
     getDoc,
@@ -92,18 +92,27 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         };
 
         const fetchCategories = async () => {
-            try {
-                const querySnapshot = await getDocs(collection(db, 'categories'));
-                const fetchedCategories = querySnapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                })) as Category[];
-                setCategories(fetchedCategories);
-            } catch (error) {
-                console.error('Fehler beim Abrufen der Kategorien:', error);
-                Alert.alert('Fehler', 'Kategorien konnten nicht geladen werden.');
-            }
-        };
+    const user = FIREBASE_AUTH.currentUser;
+
+    if (!user) {
+        console.error('Kein Nutzer angemeldet.');
+        return;
+    }
+
+    try {
+        const q = query(collection(db, 'categories'), where('userID', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+        const fetchedCategories = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        })) as Category[];
+        setCategories(fetchedCategories);
+    } catch (error) {
+        console.error('Fehler beim Abrufen der Kategorien:', error);
+        Alert.alert('Fehler', 'Kategorien konnten nicht geladen werden.');
+    }
+};
+
 
         fetchNote();
         fetchCategories();
@@ -233,8 +242,9 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                             label={category.name}
                             value={category.id}
                         />
-                    ))}
-                </Picker>
+                        ))}
+                    </Picker>
+
             </View>
             <FlatList
                 data={imageURLs}
