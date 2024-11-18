@@ -197,7 +197,7 @@ const AllNotes: React.FC = () => {
           style={styles.addButton}
           onPress={() => navigation.navigate('CreateNote')}
         >
-          <Text style={styles.addButtonText}>+ Neue Notiz</Text>
+          <Text testID='add-note-button' style={styles.addButtonText}>+ Neue Notiz</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>

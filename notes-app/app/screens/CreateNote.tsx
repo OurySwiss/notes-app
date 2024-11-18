@@ -7,8 +7,9 @@ import {
     TouchableOpacity,
     FlatList,
     Image,
-    Picker,
+    Modal,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
@@ -16,6 +17,8 @@ import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ScrollView } from 'react-native';
+import ColorPicker from 'react-native-wheel-color-picker';
+import Slider from '@react-native-community/slider';
 
 const db = getFirestore(app);
 
@@ -52,6 +55,7 @@ const CreateNote: React.FC = () => {
     const [newCategory, setNewCategory] = useState('');
     const [selectedColor, setSelectedColor] = useState<string>(COLORS[0]);
     const [modalVisible, setModalVisible] = useState(false);
+    const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
 
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -61,46 +65,67 @@ const CreateNote: React.FC = () => {
     };
 
     const fetchCategories = async () => {
-        try {
-            const querySnapshot = await getDocs(collection(db, 'categories'));
-            const fetchedCategories = querySnapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            })) as Category[];
-            setCategories(fetchedCategories);
-        } catch (error) {
-            console.error('Fehler beim Abrufen der Kategorien:', error);
-            showModal('Kategorien konnten nicht geladen werden.');
-        }
-    };
+    const user = FIREBASE_AUTH.currentUser;
+
+    if (!user) {
+        showModal('Kein Nutzer angemeldet. Bitte logge dich ein.');
+        return;
+    }
+
+    try {
+        // Kategorien nach userID filtern
+        const q = query(collection(db, 'categories'), where('userID', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+        const fetchedCategories = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        })) as Category[];
+        setCategories(fetchedCategories);
+    } catch (error) {
+        console.error('Fehler beim Abrufen der Kategorien:', error);
+        showModal('Kategorien konnten nicht geladen werden.');
+    }
+};
+
+
 
     useEffect(() => {
         fetchCategories();
     }, []);
 
     const handleCreateCategory = async () => {
-        if (!newCategory.trim()) {
-            showModal('Bitte gib einen Namen für die Kategorie ein.');
-            return;
-        }
+    const user = FIREBASE_AUTH.currentUser;
 
-        try {
-            const docRef = await addDoc(collection(db, 'categories'), {
-                name: newCategory,
-                color: selectedColor,
-            });
-            setCategories((prev) => [
-                ...prev,
-                { id: docRef.id, name: newCategory, color: selectedColor },
-            ]);
-            setNewCategory('');
-            setSelectedColor(COLORS[0]);
-            showModal('Kategorie erfolgreich erstellt!');
-        } catch (error) {
-            console.error('Fehler beim Erstellen der Kategorie:', error);
-            showModal('Kategorie konnte nicht erstellt werden.');
-        }
-    };
+    if (!user) {
+        showModal('Kein Nutzer angemeldet. Bitte logge dich ein.');
+        return;
+    }
+
+    if (!newCategory.trim()) {
+        showModal('Bitte gib einen Namen für die Kategorie ein.');
+        return;
+    }
+
+    try {
+        const docRef = await addDoc(collection(db, 'categories'), {
+            name: newCategory,
+            color: selectedColor,
+            userID: user.uid, // Nutzer-ID hinzufügen
+        });
+        setCategories((prev) => [
+            ...prev,
+            { id: docRef.id, name: newCategory, color: selectedColor, userID: user.uid },
+        ]);
+        setNewCategory('');
+        setSelectedColor(COLORS[0]);
+        showModal('Kategorie erfolgreich erstellt!');
+    } catch (error) {
+        console.error('Fehler beim Erstellen der Kategorie:', error);
+        showModal('Kategorie konnte nicht erstellt werden.');
+    }
+};
+
+
 
     const handleDeleteCategory = async (categoryId: string) => {
         try {
@@ -210,7 +235,9 @@ const CreateNote: React.FC = () => {
             setImageURLs([]);
             setSharedWith([]);
             setSelectedCategory(null);
-            navigation.navigate('Inside');
+            setTimeout(() => {
+                navigation.navigate('Inside');
+                }, 1000);
         } catch (error) {
             console.error('Fehler beim Erstellen der Notiz: ', error);
             showModal('Fehler beim Erstellen der Notiz.');
@@ -219,154 +246,192 @@ const CreateNote: React.FC = () => {
 
     return (
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-
-        <View style={styles.container}>
-            <Text style={styles.heading}>Neue Notiz erstellen</Text>
+            <View style={styles.container}>
+                <Text style={styles.heading}>Neue Notiz erstellen</Text>
     
-            <TextInput
-                style={styles.input}
-                placeholder="Titel"
-                value={title}
-                onChangeText={setTitle}
-            />
-    
-            <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Beschreibung"
-                value={description}
-                onChangeText={setDescription}
-                multiline
-            />
-    
-            <View style={styles.categoryContainer}>
-                {/* <Text style={styles.label}>Kategorie:</Text> */}
-                <Picker
-                    selectedValue={selectedCategory}
-                    style={styles.picker}
-                    onValueChange={(itemValue) => setSelectedCategory(itemValue)}
-                >
-                    <Picker.Item label="Ausgewählte Kategorie" value="" />
-                    {categories.map((category) => (
-                        <Picker.Item
-                            key={category.id}
-                            label={category.name}
-                            value={category.id}
-                        />
-                    ))}
-                </Picker>
-            </View>
-    
-            <View style={styles.newCategoryContainer}>
+                {/* Titel-Eingabe */}
                 <TextInput
                     style={styles.input}
-                    placeholder="Neue Kategorie erstellen"
-                    value={newCategory}
-                    onChangeText={setNewCategory}
+                    placeholder="Titel"
+                    value={title}
+                    onChangeText={setTitle}
                 />
-                <Text style={styles.label}>Kategorie auswählen:</Text>
-               <View style={styles.colorPalette}>
-    {categories.map((category) => (
-        <View key={category.id} style={styles.categoryItem}>
-            <TouchableOpacity
-                style={[
-                    styles.colorCircle,
-                    {
-                        backgroundColor: category.color,
-                        borderWidth: selectedCategory === category.id ? 2 : 0,
-                    },
-                ]}
-                onPress={() => setSelectedCategory(category.id)}
-            />
-            <Text style={styles.categoryName}>{category.name}</Text>
-            <TouchableOpacity
-                style={styles.deleteCategoryButton}
-                onPress={() => handleDeleteCategory(category.id)}
-            >
-                <Text style={styles.deleteCategoryText}>X</Text>
-            </TouchableOpacity>
-        </View>
-    ))}
-
+    
+                {/* Beschreibung-Eingabe */}
+                <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Beschreibung"
+                    value={description}
+                    onChangeText={setDescription}
+                    multiline
+                />
+    
+                {/* Kategorie-Auswahl */}
+                <View style={styles.categoryContainer}>
+                    <Text style={styles.label}>Kategorie:</Text>
+                    <Picker
+                        selectedValue={selectedCategory}
+                        style={styles.picker}
+                        onValueChange={(itemValue: React.SetStateAction<string | null>) => setSelectedCategory(itemValue)}
+                        testID='category-picker'
+                    >
+                        <Picker.Item label="Kategorie auswählen" value="" />
+                        {categories.map((category) => (
+                            <Picker.Item
+                                key={category.id}
+                                label={category.name}
+                                value={category.id}
+                            />
+                        ))}
+                    </Picker>
                 </View>
-                <TouchableOpacity
-                    style={styles.createCategoryButton}
-                    onPress={handleCreateCategory}
-                >
-                    <Text style={styles.buttonTextWhite}>Kategorie hinzufügen</Text>
-                </TouchableOpacity>
-            </View>
+                <Text style={styles.label}>Neue Kategorie erstellen:</Text>
+
+                {/* Neue Kategorie erstellen */}
+                <View style={styles.newCategoryContainer}>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Neue Kategorie erstellen"
+                        value={newCategory}
+                        onChangeText={setNewCategory}
+                    />
+    <TouchableOpacity
+    style={[styles.colorPreview, { backgroundColor: selectedColor }]}
+    onPress={() => setIsColorPickerVisible(true)} 
+>
+    <Text style={styles.colorPreviewText}>Farbe für neue Kategorie auswählen</Text>
+</TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.createCategoryButton}
+                        onPress={handleCreateCategory}
+                    >
+                        <Text style={styles.buttonTextWhite}>Kategorie hinzufügen</Text>
+                    </TouchableOpacity>
+                </View>
     
-            <FlatList
-                data={imageURLs}
-                keyExtractor={(url, index) => index.toString()}
-                renderItem={({ item: url }) => (
-                    <View style={styles.imageWrapper}>
-                        <Image source={{ uri: url }} style={styles.image} />
-                        <TouchableOpacity
-                            style={styles.deleteButton}
-                            onPress={() => handleRemoveImage(url)}
-                        >
-                            <Text style={styles.deleteButtonText}>X</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.imageContainer}
-            />
-    
-            <TouchableOpacity style={styles.shareButton} onPress={handleImagePicker}>
-                <Text style={styles.buttonTextWhite}>Bild hinzufügen</Text>
-            </TouchableOpacity>
-    
-            <TextInput
-                style={styles.input}
-                placeholder="Benutzername zum Teilen eingeben"
-                value={shareUsername}
-                onChangeText={setShareUsername}
-            />
-            <TouchableOpacity style={styles.shareButton} onPress={handleAddShareUser}>
-                <Text style={styles.buttonTextWhite}>Benutzer zur Freigabe hinzufügen</Text>
-            </TouchableOpacity>
-    
-            {sharedWith.length > 0 && (
-                <View style={styles.sharedWithContainer}>
-                    <Text style={styles.shareHeading}>Geteilt mit:</Text>
-                    {sharedWith.map((user) => (
-                        <View key={user.uid} style={styles.sharedUserContainer}>
-                            <Text style={styles.sharedUserText}>{user.username}</Text>
+                {/* Kategorien anzeigen */}
+                <Text style={[styles.label, { marginTop: 20 }]}>Erstellte Kategorie:</Text>
+
+                <View style={styles.colorPalette}>
+                    {categories.map((category) => (
+                        <View key={category.id} style={styles.categoryItem}>
+                            <View
+                                style={[
+                                    styles.colorCircle,
+                                    { backgroundColor: category.color },
+                                ]}
+                            />
+                            <Text style={styles.categoryName}>{category.name}</Text>
                             <TouchableOpacity
-                                onPress={() => removeSharedUser(user.uid)}
-                                style={styles.removeButton}
+                                style={styles.deleteCategoryButton}
+                                onPress={() => handleDeleteCategory(category.id)}
                             >
-                                <Text style={styles.removeButtonText}>X</Text>
+                                <Text style={styles.deleteCategoryText}>X</Text>
                             </TouchableOpacity>
                         </View>
                     ))}
                 </View>
-            )}
     
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
-                <Text style={styles.buttonTextWhite}>Speichern</Text>
-            </TouchableOpacity>
+                {/* Bilder hinzufügen */}
+                <FlatList
+                    data={imageURLs}
+                    keyExtractor={(url, index) => index.toString()}
+                    renderItem={({ item: url }) => (
+                        <View style={styles.imageWrapper}>
+                            <Image source={{ uri: url }} style={styles.image} />
+                            <TouchableOpacity
+                                style={styles.deleteButton}
+                                onPress={() => handleRemoveImage(url)}
+                            >
+                                <Text style={styles.deleteButtonText}>X</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.imageContainer}
+                />
+                <TouchableOpacity style={styles.shareButton} onPress={handleImagePicker}>
+                    <Text style={styles.buttonTextWhite}>Bild hinzufügen</Text>
+                </TouchableOpacity>
     
-            {modalVisible && (
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContainer}>
-                        <Text style={styles.modalText}>{message}</Text>
-                        <TouchableOpacity
-                            style={styles.modalButton}
-                            onPress={() => setModalVisible(false)}
-                        >
-                            <Text style={styles.modalButtonText}>Okay</Text>
-                        </TouchableOpacity>
+                {/* Benutzer teilen */}
+                <TextInput
+                    style={styles.input}
+                    placeholder="Benutzername zum Teilen eingeben"
+                    value={shareUsername}
+                    onChangeText={setShareUsername}
+                />
+                <TouchableOpacity style={styles.shareButton} onPress={handleAddShareUser}>
+                    <Text style={styles.buttonTextWhite}>Benutzer zur Freigabe hinzufügen</Text>
+                </TouchableOpacity>
+                {sharedWith.length > 0 && (
+                    <View style={styles.sharedWithContainer}>
+                        <Text style={styles.shareHeading}>Geteilt mit:</Text>
+                        {sharedWith.map((user) => (
+                            <View key={user.uid} style={styles.sharedUserContainer}>
+                                <Text style={styles.sharedUserText}>{user.username}</Text>
+                                <TouchableOpacity
+                                    onPress={() => removeSharedUser(user.uid)}
+                                    style={styles.removeButton}
+                                >
+                                    <Text style={styles.removeButtonText}>X</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ))}
                     </View>
-                </View>
-            )}
+                )}
+    
+                {/* Speichern-Button */}
+                <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
+                    <Text style={styles.buttonTextWhite}>Speichern</Text>
+                </TouchableOpacity>
+    
+                {/* Modal für Color Picker */}
+                {isColorPickerVisible && (
+    <Modal
+        visible={isColorPickerVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsColorPickerVisible(false)}
+    >
+        <View style={styles.modalContainer}>
+            <ColorPicker
+                color={selectedColor}
+                onColorChangeComplete={(color) => setSelectedColor(color)} 
+                thumbSize={40}
+                sliderSize={40}
+                noSnap={true}
+                row={false}
+            />
+            <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setIsColorPickerVisible(false)} 
+            >
+                <Text style={styles.modalCloseText}>Schliessen</Text>
+            </TouchableOpacity>
         </View>
+    </Modal>
+)}
+    
+                {/* Nachricht anzeigen */}
+                {modalVisible && (
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContainer}>
+                            <Text testID='success-message' style={styles.modalText}>{message}</Text>
+                            <TouchableOpacity
+                                style={styles.modalButton}
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <Text style={styles.modalButtonText}>Okay</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+            </View>
         </ScrollView>
-
     );
+    
     
 };
 
@@ -577,6 +642,36 @@ const styles = StyleSheet.create({
     scrollContainer: {
         flexGrow: 1,
         justifyContent: 'space-between', 
+    },
+    colorPreview: {
+        height: 50,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    colorPreviewText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+    },
+    modalContainer2: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalCloseButton: {
+        backgroundColor: 'red',
+        borderRadius: 25,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    modalCloseText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
 
