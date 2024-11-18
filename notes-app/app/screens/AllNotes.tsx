@@ -120,6 +120,7 @@ const AllNotes: React.FC = () => {
                     onPress={() => navigation.navigate('CreateNote')}
                     onPressIn={handlePlusButtonPressIn}
                     onPressOut={handlePlusButtonPressOut}
+                    testID='add-note-button'
                 >
                     <Text style={styles.addButtonText}>+</Text>
                 </TouchableOpacity>

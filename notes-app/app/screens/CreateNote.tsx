@@ -107,7 +107,9 @@ const CreateNote: React.FC = () => {
                 setDescription('');
                 setImageURLs([]);
                 setSharedWith([]);
+                setTimeout(() => {
                 navigation.navigate('Inside');
+                }, 1000);
             } catch (error) {
                 console.error('Fehler beim Erstellen der Notiz:', error);
                 setMessage('Fehler beim Erstellen der Notiz.');
@@ -182,7 +184,7 @@ const CreateNote: React.FC = () => {
             <TouchableOpacity style={styles.saveButton} onPress={handleSaveNote}>
                 <Text style={styles.buttonTextWhite}>Speichern</Text>
             </TouchableOpacity>
-            {message ? <Text style={styles.message}>{message}</Text> : null}
+            {message ? <Text testID='success-message' style={styles.message}>{message}</Text> : null}
         </View>
     );
 };
