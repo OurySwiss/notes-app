@@ -9,7 +9,7 @@ import {
     Image,
     Picker,
 } from 'react-native';
-import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -100,6 +100,18 @@ const CreateNote: React.FC = () => {
             showModal('Kategorie konnte nicht erstellt werden.');
         }
     };
+
+    const handleDeleteCategory = async (categoryId: string) => {
+        try {
+            await deleteDoc(doc(db, 'categories', categoryId));            
+            setCategories((prev) => prev.filter((category) => category.id !== categoryId));
+            showModal('Erfolg! Kategorie erfolgreich gelöscht.');
+        } catch (error) {
+            console.error('Fehler beim Löschen der Kategorie:', error);
+            showModal('Fehler! Kategorie konnte nicht gelöscht werden.');
+        }
+    };
+    
 
     const handleImagePicker = () => {
         const options = {
@@ -224,13 +236,13 @@ const CreateNote: React.FC = () => {
             />
     
             <View style={styles.categoryContainer}>
-                <Text style={styles.label}>Kategorie wählen:</Text>
+                {/* <Text style={styles.label}>Kategorie:</Text> */}
                 <Picker
                     selectedValue={selectedCategory}
                     style={styles.picker}
                     onValueChange={(itemValue) => setSelectedCategory(itemValue)}
                 >
-                    <Picker.Item label="Kategorie auswählen" value="" />
+                    <Picker.Item label="Ausgewählte Kategorie" value="" />
                     {categories.map((category) => (
                         <Picker.Item
                             key={category.id}
@@ -248,20 +260,30 @@ const CreateNote: React.FC = () => {
                     value={newCategory}
                     onChangeText={setNewCategory}
                 />
-                <View style={styles.colorPalette}>
-                    {COLORS.map((color) => (
-                        <TouchableOpacity
-                            key={color}
-                            style={[
-                                styles.colorCircle,
-                                {
-                                    backgroundColor: color,
-                                    borderWidth: selectedColor === color ? 2 : 0,
-                                },
-                            ]}
-                            onPress={() => setSelectedColor(color)}
-                        />
-                    ))}
+                <Text style={styles.label}>Kategorie auswählen:</Text>
+               <View style={styles.colorPalette}>
+    {categories.map((category) => (
+        <View key={category.id} style={styles.categoryItem}>
+            <TouchableOpacity
+                style={[
+                    styles.colorCircle,
+                    {
+                        backgroundColor: category.color,
+                        borderWidth: selectedCategory === category.id ? 2 : 0,
+                    },
+                ]}
+                onPress={() => setSelectedCategory(category.id)}
+            />
+            <Text style={styles.categoryName}>{category.name}</Text>
+            <TouchableOpacity
+                style={styles.deleteCategoryButton}
+                onPress={() => handleDeleteCategory(category.id)}
+            >
+                <Text style={styles.deleteCategoryText}>X</Text>
+            </TouchableOpacity>
+        </View>
+    ))}
+
                 </View>
                 <TouchableOpacity
                     style={styles.createCategoryButton}
@@ -485,10 +507,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
-    colorPalette: {
-        flexDirection: 'row',
-        marginVertical: 10,
-    },
     colorCircle: {
         width: 30,
         height: 30,
@@ -508,6 +526,48 @@ const styles = StyleSheet.create({
     newCategoryContainer: {
         marginTop: 15,
         justifyContent: 'center',
+    },
+    colorPalette: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginVertical: 10,
+    },
+    categoryItem: {
+        alignItems: 'center',
+        margin: 5,
+    },
+    categoryName: {
+        fontSize: 12,
+        marginTop: 5,
+        textAlign: 'center',
+        color: '#333',
+    },
+    deleteCategoryButton: {
+        marginTop: 5,
+        backgroundColor: 'red',
+        borderRadius: 5,
+        padding: 5,
+        alignItems: 'center',
+    },
+    deleteCategoryText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 10,
+    },
+    label: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    picker: {
+        height: 50,
+        backgroundColor: '#eaeaea',
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        marginBottom: 15,
     },
 });
 
