@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Image } from 'react-native';
+import {
+    View,
+    TextInput,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    Alert,
+    FlatList,
+    Image,
+    Picker,
+} from 'react-native';
 import { app } from '../../FirebaseConfig';
 import {
     doc,
@@ -32,6 +42,12 @@ interface SharedUser {
     username: string;
 }
 
+interface Category {
+    id: string;
+    name: string;
+    color: string;
+}
+
 const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const { noteId } = route.params;
     const [title, setTitle] = useState('');
@@ -40,6 +56,8 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
     const [message, setMessage] = useState('');
     const [shareUsername, setShareUsername] = useState('');
     const [sharedWith, setSharedWith] = useState<SharedUser[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchNote = async () => {
@@ -51,8 +69,8 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                     setTitle(noteData.title);
                     setDescription(noteData.description);
                     setImageURLs(noteData.imageURL || []);
+                    setSelectedCategory(noteData.category || null);
 
-                    // Fetch shared user details
                     const sharedUserIDs = noteData.sharedWith || [];
                     const usersCollection = collection(db, 'userProfile');
                     const userQuery = query(usersCollection, where('uid', 'in', sharedUserIDs));
@@ -72,7 +90,23 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 setMessage('Fehler beim Laden der Notiz.');
             }
         };
+
+        const fetchCategories = async () => {
+            try {
+                const querySnapshot = await getDocs(collection(db, 'categories'));
+                const fetchedCategories = querySnapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                })) as Category[];
+                setCategories(fetchedCategories);
+            } catch (error) {
+                console.error('Fehler beim Abrufen der Kategorien:', error);
+                Alert.alert('Fehler', 'Kategorien konnten nicht geladen werden.');
+            }
+        };
+
         fetchNote();
+        fetchCategories();
     }, [noteId]);
 
     const handleImagePicker = () => {
@@ -94,6 +128,10 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 setImageURLs((prev) => [...prev, ...newImageURLs]);
             }
         });
+    };
+
+    const handleRemoveImage = (url: string) => {
+        setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
     };
 
     const handleAddShareUser = async () => {
@@ -130,13 +168,9 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         setSharedWith((prev) => prev.filter((user) => user.uid !== uid));
     };
 
-    const handleRemoveImage = (url: string) => {
-        setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
-    };
-
     const handleSave = async () => {
-        if (!title.trim() || !description.trim()) {
-            setMessage('Titel und Beschreibung dürfen nicht leer sein.');
+        if (!title.trim() || !description.trim() || !selectedCategory) {
+            setMessage('Bitte fülle alle Felder aus und wähle eine Kategorie.');
             return;
         }
 
@@ -147,6 +181,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 description,
                 imageURL: imageURLs,
                 sharedWith: sharedWith.map((user) => user.uid),
+                category: selectedCategory,
             });
             setMessage('Notiz erfolgreich aktualisiert!');
             navigation.goBack();
@@ -184,6 +219,23 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
                 onChangeText={setDescription}
                 multiline
             />
+            <View style={styles.categoryContainer}>
+                <Text style={styles.label}>Kategorie wählen:</Text>
+                <Picker
+                    selectedValue={selectedCategory}
+                    style={styles.picker}
+                    onValueChange={(itemValue) => setSelectedCategory(itemValue)}
+                >
+                    <Picker.Item label="Kategorie auswählen" value={null} />
+                    {categories.map((category) => (
+                        <Picker.Item
+                            key={category.id}
+                            label={category.name}
+                            value={category.id}
+                        />
+                    ))}
+                </Picker>
+            </View>
             <FlatList
                 data={imageURLs}
                 keyExtractor={(url, index) => index.toString()}
@@ -205,7 +257,6 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
             <TouchableOpacity style={styles.shareButton} onPress={handleImagePicker}>
                 <Text style={styles.buttonTextWhite}>Bild hinzufügen</Text>
             </TouchableOpacity>
-
             <TextInput
                 style={styles.input}
                 placeholder="Benutzername zum Teilen eingeben"
@@ -215,24 +266,20 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
             <TouchableOpacity style={styles.shareButton} onPress={handleAddShareUser}>
                 <Text style={styles.buttonTextWhite}>Benutzer zur Freigabe hinzufügen</Text>
             </TouchableOpacity>
-
-            {sharedWith.length > 0 && (
-                <View style={styles.sharedWithContainer}>
-                    <Text style={styles.shareHeading}>Geteilt mit:</Text>
-                    {sharedWith.map((user) => (
-                        <View key={user.uid} style={styles.sharedUserContainer}>
-                            <Text style={styles.sharedUserText}>{user.username}</Text>
-                            <TouchableOpacity
-                                onPress={() => removeSharedUser(user.uid)}
-                                style={styles.removeButton}
-                            >
-                                <Text style={styles.removeButtonText}>X</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ))}
-                </View>
-            )}
-
+            <View style={styles.sharedWithContainer}>
+                <Text style={styles.shareHeading}>Geteilt mit:</Text>
+                {sharedWith.map((user) => (
+                    <View key={user.uid} style={styles.sharedUserContainer}>
+                        <Text style={styles.sharedUserText}>{user.username}</Text>
+                        <TouchableOpacity
+                            onPress={() => removeSharedUser(user.uid)}
+                            style={styles.removeButton}
+                        >
+                            <Text style={styles.removeButtonText}>X</Text>
+                        </TouchableOpacity>
+                    </View>
+                ))}
+            </View>
             <View style={styles.buttonContainer}>
                 <TouchableOpacity style={styles.deleteButtonContainer} onPress={handleDelete}>
                     <Text style={styles.buttonText}>Löschen</Text>
@@ -245,6 +292,7 @@ const EditNote: React.FC<Props> = ({ route, navigation }) => {
         </View>
     );
 };
+
 
 const styles = StyleSheet.create({
     container: {
@@ -373,6 +421,21 @@ const styles = StyleSheet.create({
     removeButtonText: {
         color: 'white',
         fontWeight: 'bold',
+    },
+    categoryContainer: {
+        marginBottom: 15, 
+    },
+    picker: {
+        height: 50, 
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+    },
+    label: {
+        fontSize: 16,
+        fontWeight: '600', 
+        color: '#333', 
+        marginBottom: 8, 
     },
 });
 
