@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, FlatList, Image, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+    View,
+    TextInput,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    FlatList,
+    Image,
+    Alert,
+    Picker,
+} from 'react-native';
 import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { app, FIREBASE_AUTH } from '../../FirebaseConfig';
 import { launchImageLibrary, PhotoQuality } from 'react-native-image-picker';
@@ -14,6 +24,22 @@ interface SharedUser {
     username: string;
 }
 
+interface Category {
+    id: string;
+    name: string;
+    color: string; // Farbe für die Kategorie
+}
+
+const COLORS = [
+    '#FFCDD2',
+    '#F8BBD0',
+    '#E1BEE7',
+    '#D1C4E9',
+    '#C5CAE9',
+    '#BBDEFB',
+    '#B3E5FC',
+]; // Farbauswahl
+
 const CreateNote: React.FC = () => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -21,8 +47,56 @@ const CreateNote: React.FC = () => {
     const [message, setMessage] = useState('');
     const [shareUsername, setShareUsername] = useState('');
     const [sharedWith, setSharedWith] = useState<SharedUser[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [newCategory, setNewCategory] = useState('');
+    const [selectedColor, setSelectedColor] = useState<string>(COLORS[0]); // Standardfarbe
 
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+    // Kategorien aus Firestore abrufen
+    const fetchCategories = async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, 'categories'));
+            const fetchedCategories = querySnapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+            })) as Category[];
+            setCategories(fetchedCategories);
+        } catch (error) {
+            console.error('Fehler beim Abrufen der Kategorien:', error);
+            Alert.alert('Fehler', 'Kategorien konnten nicht geladen werden.');
+        }
+    };
+
+    useEffect(() => {
+        fetchCategories();
+    }, []);
+
+    // Neue Kategorie erstellen
+    const handleCreateCategory = async () => {
+        if (!newCategory.trim()) {
+            Alert.alert('Fehler', 'Bitte gib einen Namen für die Kategorie ein.');
+            return;
+        }
+
+        try {
+            const docRef = await addDoc(collection(db, 'categories'), {
+                name: newCategory,
+                color: selectedColor, // Farbe hinzufügen
+            });
+            setCategories((prev) => [
+                ...prev,
+                { id: docRef.id, name: newCategory, color: selectedColor },
+            ]);
+            setNewCategory('');
+            setSelectedColor(COLORS[0]); // Standardfarbe zurücksetzen
+            Alert.alert('Erfolg', 'Kategorie erfolgreich erstellt!');
+        } catch (error) {
+            console.error('Fehler beim Erstellen der Kategorie:', error);
+            Alert.alert('Fehler', 'Kategorie konnte nicht erstellt werden.');
+        }
+    };
 
     const handleImagePicker = () => {
         const options = {
@@ -47,7 +121,7 @@ const CreateNote: React.FC = () => {
 
     const handleAddShareUser = async () => {
         if (!shareUsername.trim()) {
-            Alert.alert("Fehler", "Benutzername darf nicht leer sein.");
+            Alert.alert('Fehler', 'Benutzername darf nicht leer sein.');
             return;
         }
 
@@ -67,20 +141,12 @@ const CreateNote: React.FC = () => {
                 setSharedWith((prev) => [...prev, userToShare]);
                 setShareUsername('');
             } else {
-                Alert.alert("Fehler", "Benutzername nicht gefunden.");
+                Alert.alert('Fehler', 'Benutzername nicht gefunden.');
             }
         } catch (error) {
-            console.error("Fehler beim Hinzufügen des Benutzers zur Freigabe:", error);
-            Alert.alert("Fehler", "Fehler beim Hinzufügen des Benutzers zur Freigabe.");
+            console.error('Fehler beim Hinzufügen des Benutzers zur Freigabe:', error);
+            Alert.alert('Fehler', 'Fehler beim Hinzufügen des Benutzers zur Freigabe.');
         }
-    };
-
-    const removeSharedUser = (uid: string) => {
-        setSharedWith((prev) => prev.filter((user) => user.uid !== uid));
-    };
-
-    const handleRemoveImage = (url: string) => {
-        setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
     };
 
     const handleSaveNote = async () => {
@@ -92,29 +158,41 @@ const CreateNote: React.FC = () => {
             return;
         }
 
-        if (title && description) {
-            try {
-                await addDoc(collection(db, 'notes'), {
-                    title,
-                    description,
-                    imageURL: imageURLs,
-                    userID: user.uid,
-                    userName: userName,
-                    sharedWith: sharedWith.map((user) => user.uid),
-                });
-                setMessage('Notiz erfolgreich erstellt!');
-                setTitle('');
-                setDescription('');
-                setImageURLs([]);
-                setSharedWith([]);
-                navigation.navigate('Inside');
-            } catch (error) {
-                console.error('Fehler beim Erstellen der Notiz:', error);
-                setMessage('Fehler beim Erstellen der Notiz.');
-            }
-        } else {
-            setMessage('Bitte Titel und Beschreibung eingeben.');
+        if (!title || !description || !selectedCategory) {
+            setMessage('Bitte fülle alle Felder aus und wähle eine Kategorie.');
+            return;
         }
+
+        try {
+            await addDoc(collection(db, 'notes'), {
+                title,
+                description,
+                imageURL: imageURLs,
+                category: selectedCategory,
+                userID: user.uid,
+                userName,
+                sharedWith: sharedWith.map((user) => user.uid),
+                createdAt: new Date(),
+            });
+            setMessage('Notiz erfolgreich erstellt!');
+            setTitle('');
+            setDescription('');
+            setImageURLs([]);
+            setSharedWith([]);
+            setSelectedCategory(null);
+            navigation.navigate('Inside');
+        } catch (error) {
+            console.error('Fehler beim Erstellen der Notiz: ', error);
+            setMessage('Fehler beim Erstellen der Notiz.');
+        }
+    };
+
+    const removeSharedUser = (uid: string) => {
+        setSharedWith((prev) => prev.filter((user) => user.uid !== uid));
+    };
+
+    const handleRemoveImage = (url: string) => {
+        setImageURLs((prev) => prev.filter((imageUrl) => imageUrl !== url));
     };
 
     return (
@@ -133,6 +211,52 @@ const CreateNote: React.FC = () => {
                 onChangeText={setDescription}
                 multiline
             />
+            <View style={styles.categoryContainer}>
+                <Text style={styles.label}>Kategorie wählen:</Text>
+                <Picker
+                    selectedValue={selectedCategory}
+                    style={styles.picker}
+                    onValueChange={(itemValue) => setSelectedCategory(itemValue)}
+                >
+                    <Picker.Item label="Kategorie auswählen" value="" />
+                    {categories.map((category) => (
+                        <Picker.Item
+                            key={category.id}
+                            label={category.name}
+                            value={category.id}
+                        />
+                    ))}
+                </Picker>
+            </View>
+            <View style={styles.newCategoryContainer}>
+                <TextInput
+                    style={styles.input}
+                    placeholder="Neue Kategorie erstellen"
+                    value={newCategory}
+                    onChangeText={setNewCategory}
+                />
+                <View style={styles.colorPalette}>
+                    {COLORS.map((color) => (
+                        <TouchableOpacity
+                            key={color}
+                            style={[
+                                styles.colorCircle,
+                                {
+                                    backgroundColor: color,
+                                    borderWidth: selectedColor === color ? 2 : 0,
+                                },
+                            ]}
+                            onPress={() => setSelectedColor(color)}
+                        />
+                    ))}
+                </View>
+                <TouchableOpacity
+                    style={styles.createCategoryButton}
+                    onPress={handleCreateCategory}
+                >
+                    <Text style={styles.buttonTextWhite}>Kategorie hinzufügen</Text>
+                </TouchableOpacity>
+            </View>
             <FlatList
                 data={imageURLs}
                 keyExtractor={(url, index) => index.toString()}
@@ -210,6 +334,36 @@ const styles = StyleSheet.create({
         height: 100,
         textAlignVertical: 'top',
     },
+    categoryContainer: {
+        marginBottom: 15,
+    },
+    newCategoryContainer: {
+        marginTop: 15,
+        justifyContent: 'center',
+    },
+    picker: {
+        height: 50,
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+    },
+    colorPalette: {
+        flexDirection: 'row',
+        marginVertical: 10,
+    },
+    colorCircle: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        marginHorizontal: 5,
+        borderColor: 'black',
+    },
+    createCategoryButton: {
+        backgroundColor: 'blue',
+        borderRadius: 25,
+        padding: 10,
+        alignItems: 'center',
+    },
     saveButton: {
         backgroundColor: 'blue',
         borderRadius: 25,
@@ -222,30 +376,23 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         paddingVertical: 12,
         alignItems: 'center',
-        marginVertical: 10,
+        marginVertical: 15,
     },
     buttonTextWhite: {
-        color: 'white',
+        color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
     },
-    message: {
-        color: '#555',
-        fontSize: 14,
-        marginTop: 10,
-    },
-    imageContainer: {
-        flexDirection: 'row',
-        marginBottom: 10,
+    image: {
+        width: 100,
+        height: 100,
+        resizeMode: 'cover',
+        borderRadius: 10,
+        marginHorizontal: 5,
     },
     imageWrapper: {
         position: 'relative',
         marginRight: 10,
-    },
-    image: {
-        width: 80,
-        height: 80,
-        borderRadius: 5,
     },
     deleteButton: {
         position: 'absolute',
@@ -260,6 +407,10 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
         fontSize: 12,
+    },
+    imageContainer: {
+        flexDirection: 'row',
+        marginVertical: 10,
     },
     sharedWithContainer: {
         marginVertical: 10,
@@ -292,6 +443,11 @@ const styles = StyleSheet.create({
     removeButtonText: {
         color: 'white',
         fontWeight: 'bold',
+    },
+    message: {
+        color: 'red',
+        marginTop: 10,
+        fontSize: 16,
     },
 });
 
