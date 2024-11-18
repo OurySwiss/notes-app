@@ -273,6 +273,7 @@ const CreateNote: React.FC = () => {
                         selectedValue={selectedCategory}
                         style={styles.picker}
                         onValueChange={(itemValue: React.SetStateAction<string | null>) => setSelectedCategory(itemValue)}
+                        testID='category-picker'
                     >
                         <Picker.Item label="Kategorie auswählen" value="" />
                         {categories.map((category) => (
@@ -417,7 +418,7 @@ const CreateNote: React.FC = () => {
                 {modalVisible && (
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContainer}>
-                            <Text style={styles.modalText}>{message}</Text>
+                            <Text testID='success-message' style={styles.modalText}>{message}</Text>
                             <TouchableOpacity
                                 style={styles.modalButton}
                                 onPress={() => setModalVisible(false)}
